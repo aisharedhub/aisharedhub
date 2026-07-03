@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html data-theme="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AISharedHub — Your Tools</title>
+<link href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #0a0712;
+  --surface: #120d1f;
+  --surface-2: #18112a;
+  --offset: #1e1633;
+  --border: #2a2142;
+  --text: #ece9f5;
+  --muted: #a39cc0;
+  --faint: #6b6390;
+  --primary: #a855f7;
+  --primary-active: #7e22ce;
+  --glow: #c084fc;
+  --success: #34d399;
+  --glow-primary: 0 0 24px rgba(168, 85, 247, 0.45);
+  --font-display: 'Clash Display', sans-serif;
+  --font-body: 'Satoshi', 'Inter', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 2.5rem 1.25rem;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  overflow-x: hidden;
+}
+/* ambient background glows */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(45% 45% at 15% 8%, rgba(168,85,247,0.16), transparent 70%),
+    radial-gradient(40% 40% at 90% 100%, rgba(34,211,238,0.10), transparent 70%);
+}
+h1, h2 { font-family: var(--font-display); letter-spacing: -0.02em; line-height: 1.15; }
+
+.shell { width: 100%; max-width: 900px; position: relative; z-index: 1; }
+
+/* Header */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2.25rem; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 0.8rem; }
+.brand__mark {
+  width: 44px; height: 44px; border-radius: 13px;
+  display: grid; place-items: center; font-size: 1.25rem;
+  background: linear-gradient(150deg, var(--primary), var(--primary-active));
+  box-shadow: var(--glow-primary);
+}
+.brand__name { font-family: var(--font-display); font-weight: 600; font-size: 1.15rem; }
+.brand__plan { font-size: 0.72rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--glow); font-weight: 600; }
+.status-chip {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.45rem 0.85rem; border-radius: 9999px;
+  background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.30);
+  color: var(--success); font-size: 0.8rem; font-weight: 600;
+}
+.status-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px rgba(52,211,153,0.8); }
+
+/* Title */
+.head h1 { font-size: clamp(2rem, 1.2rem + 2.4vw, 2.7rem); font-weight: 600; }
+.head p { margin: 0.45rem 0 2rem; font-size: 0.9rem; color: var(--muted); }
+.head p strong { color: var(--text); font-weight: 600; }
+
+/* Cards */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1.25rem; }
+
+.card {
+  --accent: var(--primary);
+  position: relative;
+  padding: 1.6rem 1.4rem 1.4rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.65rem;
+  overflow: hidden;
+  transition: transform 220ms cubic-bezier(0.16,1,0.3,1), border-color 220ms, box-shadow 220ms;
+}
+/* top accent stripe */
+.card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.85;
+}
+/* hover glow wash */
+.card::after {
+  content: ''; position: absolute; inset: 0; z-index: 0; opacity: 0; transition: opacity 220ms;
+  background: radial-gradient(90% 70% at 50% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%);
+}
+.card:hover { transform: translateY(-5px); border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 26px color-mix(in srgb, var(--accent) 38%, transparent); }
+.card:hover::after { opacity: 1; }
+.card > * { position: relative; z-index: 1; }
+
+.card__icon {
+  width: 58px; height: 58px; border-radius: 15px;
+  display: grid; place-items: center; font-size: 1.7rem;
+  background: color-mix(in srgb, var(--accent) 14%, var(--offset));
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.card__name { font-family: var(--font-display); font-weight: 600; font-size: 1.12rem; }
+.card__cat { font-size: 0.78rem; color: var(--faint); margin-top: -0.4rem; }
+.card__status { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.76rem; color: var(--success); }
+.card__status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 7px rgba(52,211,153,0.7); }
+
+.card__divider { width: 100%; height: 1px; background: var(--border); margin: 0.35rem 0 0.15rem; }
+
+.launch {
+  width: 100%;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  padding: 0.75rem 1rem; border-radius: 12px;
+  font-weight: 600; font-size: 0.92rem; color: #fff;
+  background: linear-gradient(120deg, var(--accent), var(--primary));
+  transition: transform 200ms cubic-bezier(0.16,1,0.3,1), box-shadow 200ms, filter 200ms;
+}
+.launch .arrow { transition: transform 200ms; }
+.launch:hover { box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 55%, transparent); filter: saturate(1.1); }
+.launch:hover .arrow { transform: translate(2px, -2px); }
+.launch:active { transform: translateY(1px); }
+
+/* per-tool accents */
+.card--chatgpt    { --accent: #19c37d; }
+.card--claude     { --accent: #d97757; }
+.card--perplexity { --accent: #22d3ee; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand__mark">◈</div>
+      <div>
+        <div class="brand__name">AISharedHub</div>
+        <div class="brand__plan">Exclusive Plan</div>
+      </div>
+    </div>
+    <div class="status-chip"><span class="dot"></span> All systems active</div>
+  </div>
+
+  <div class="head">
+    <h1>Your tools</h1>
+    <p><strong>3 of 3 active</strong> · <span id="today"></span></p>
+  </div>
+
+  <div class="grid">
+    <!-- CHATGPT -->
+    <div class="card card--chatgpt">
+      <div class="card__icon">🤖</div>
+      <div class="card__name">ChatGPT</div>
+      <div class="card__cat">AI assistant</div>
+      <div class="card__status"><span class="dot"></span> Active</div>
+      <div class="card__divider"></div>
+      <!-- 👉 put your link between the quotes on the next line -->
+      <a class="launch" href="#" target="_blank" rel="noopener noreferrer">Launch <span class="arrow">↗</span></a>
+    </div>
+
+    <!-- CLAUDE -->
+    <div class="card card--claude">
+      <div class="card__icon">🧠</div>
+      <div class="card__name">Claude</div>
+      <div class="card__cat">AI assistant</div>
+      <div class="card__status"><span class="dot"></span> Active</div>
+      <div class="card__divider"></div>
+      <!-- 👉 put your link between the quotes on the next line -->
+      <a class="launch" href="#" target="_blank" rel="noopener noreferrer">Launch <span class="arrow">↗</span></a>
+    </div>
+
+    <!-- PERPLEXITY -->
+    <div class="card card--perplexity">
+      <div class="card__icon">🔮</div>
+      <div class="card__name">Perplexity</div>
+      <div class="card__cat">AI assistant</div>
+      <div class="card__status"><span class="dot"></span> Active</div>
+      <div class="card__divider"></div>
+      <!-- 👉 put your link between the quotes on the next line -->
+      <a class="launch" href="#" target="_blank" rel="noopener noreferrer">Launch <span class="arrow">↗</span></a>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('today').textContent =
+    new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+</script>
+</body>
+</html>
