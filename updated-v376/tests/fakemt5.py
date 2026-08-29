@@ -53,9 +53,17 @@ class FakeMT5:
     TRADE_RETCODE_TIMEOUT = 10012
     TRADE_RETCODE_INVALID_FILL = 10030
     ACCOUNT_MARGIN_MODE_RETAIL_HEDGING = 2
+    ORDER_STATE_STARTED = 0
+    ORDER_STATE_PLACED = 1
+    ORDER_STATE_CANCELED = 2
+    ORDER_STATE_PARTIAL = 3
+    ORDER_STATE_FILLED = 4
+    ORDER_STATE_REJECTED = 5
+    ORDER_STATE_EXPIRED = 6
     DEAL_ENTRY_IN = 0
     DEAL_ENTRY_OUT = 1
-    DEAL_ENTRY_OUT_BY = 2
+    DEAL_ENTRY_INOUT = 2
+    DEAL_ENTRY_OUT_BY = 3
     DEAL_TYPE_BUY = 0
     DEAL_TYPE_SELL = 1
     DEAL_TYPE_BALANCE = 2
@@ -63,8 +71,12 @@ class FakeMT5:
     DEAL_TYPE_CHARGE = 4
     DEAL_TYPE_CORRECTION = 5
     DEAL_TYPE_BONUS = 6
-    DEAL_TYPE_BUY_CANCELED = 15
-    DEAL_TYPE_SELL_CANCELED = 16
+    DEAL_TYPE_BUY_CANCELED = 13
+    DEAL_TYPE_SELL_CANCELED = 14
+    DEAL_TYPE_COMMISSION = 7
+    DEAL_TYPE_INTEREST = 12
+    DEAL_TYPE_DIVIDEND = 15
+    DEAL_TYPE_TAX = 17
 
     def __init__(self, login=600092429, server="OANDA-Prop Trader",
                  balance=200000.0, equity=200000.0, currency="USD"):
@@ -78,6 +90,7 @@ class FakeMT5:
         self.positions = []      # list of _Obj
         self.orders = []         # list of _Obj (pending orders)
         self.deals = []          # list of _Obj (history deals)
+        self.history_orders = []  # list of _Obj (inactive/terminal orders)
         self.rates_m5 = {}       # symbol -> list of tuples/np rows
         self.rates_d1 = {}
         self.sent = []           # every order_send request, verbatim
@@ -140,7 +153,10 @@ class FakeMT5:
         return tuple(rows)
 
     def history_orders_get(self, *span, **kw):
-        return tuple()
+        rows = list(self.history_orders)
+        if "ticket" in kw:
+            rows = [o for o in rows if o.ticket == kw["ticket"]]
+        return tuple(rows)
 
     def copy_rates_from_pos(self, symbol, timeframe, start, count):
         book = (self.rates_m5 if timeframe == self.TIMEFRAME_M5

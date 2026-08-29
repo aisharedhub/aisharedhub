@@ -36343,6 +36343,13 @@ def _main_impl():
         body_errs = 0
         while True:
           try:
+            _poll_limit = globals().get("_TEST_MAIN_MAX_POLLS")
+            if (isinstance(_poll_limit, int)
+                    and not isinstance(_poll_limit, bool)
+                    and _POLL_TOTAL[0] >= _poll_limit):
+                # Inert offline-harness seam (same family as the migration/
+                # flatten poll bounds): production never defines it.
+                return
             ai = _verified_account_info("poll head")
             if ai is None:
                 connection_errs += 1
