@@ -266,9 +266,20 @@ def boot(argv, workdir=None, balance=200000.0):
     b._DIRECT_PROFILE = b._direct_match_recipe(argv)
     assert b._DIRECT_PROFILE is not None, argv
     b.RELEASE_RECIPE_ID = b._DIRECT_PROFILE["recipe"]
-    b.ENTRY_POLICY_ID = b._DIRECT_PROFILE["entry_policy"]
+    b.ENTRY_POLICY_ID = b._DIRECT_PROFILE.get("entry_policy")
     if b._DIRECT_PROFILE.get("capital_cents"):
         b._capital_cli = b._DIRECT_PROFILE["capital_cents"] / 100.0
+    # the guarded __main__ parse never runs under importlib: replay every
+    # recipe-derived mode flag exactly as import-time code does
+    recipe = b.RELEASE_RECIPE_ID
+    b.SELFCHECK = recipe == "selfcheck"
+    b.LIST_SYMS = recipe == "list-symbols"
+    b.DIAGNOSE = recipe == "diagnose"
+    b.PAUSE_NEW_RISK_CMD = recipe == "pause"
+    b.RESUME_PAUSED_CMD = recipe == "resume"
+    b.FLATTEN_AND_STOP = recipe == "flatten-stop"
+    b.EXPORT_CONTINUITY = recipe == "export"
+    b.RECOVER_SAFETY = recipe == "recover"
     fake = fakemt5.install(b)
     fake.account.login = LOGIN
     fake.account.server = SERVER
@@ -280,6 +291,9 @@ def boot(argv, workdir=None, balance=200000.0):
     b.ASSUME_YES = True
     b._TEST_NO_SLEEP = True
     b._TEST_MONO = 1000.0
+    b.POLL_SECONDS = 0.05        # shrink raw poll sleeps for offline runs
+    b.TARGET_FLAT_WATCH_S = 3.0  # scale the real-monotonic quiet holds to
+                                 # the fast offline poll cadence
     b._TEST_SINGLETON_ACQUIRE = lambda key: True
     # every bounded-loop seam: no harness run may spin forever
     b._TEST_VIRGIN_WAIT_MAX_POLLS = 40
@@ -373,6 +387,30 @@ def state_on_disk(b):
         return json.load(open(b.STATE_FILE))
     except Exception:
         return None
+
+
+def run_sessions(b, market, count, run=run_polls, ret=None):
+    """Advance `count` complete NY17 sessions with genuine boundary physics:
+    the process observes both sides of the 17:00-NY cut (durable mark),
+    receives the completed D1 minutes later (both ledgers fold), and
+    witnesses both sides of Prague midnight (paired anchor proof)."""
+    for _ in range(count):
+        forming = market.next_session_after(market.sessions[-1])
+        day = datetime(forming.year, forming.month, forming.day, tzinfo=NY)
+        cut = day.replace(hour=17, minute=0, second=30)
+        set_clock(b, (cut - timedelta(minutes=2)).astimezone(timezone.utc))
+        run(b, market, 2)
+        set_clock(b, cut.astimezone(timezone.utc))
+        run(b, market, 3)
+        set_clock(b, (cut + timedelta(minutes=5)).astimezone(timezone.utc))
+        market.grow(ret)
+        run(b, market, 6)
+        midnight = day.replace(hour=18, minute=0, second=20)   # 00:00 Prague
+        set_clock(b, (midnight - timedelta(seconds=50)).astimezone(
+            timezone.utc))
+        run(b, market, 2)
+        set_clock(b, midnight.astimezone(timezone.utc))
+        run(b, market, 3)
 
 
 def drive_to_authorized(b, market, run=run_polls):

@@ -625,7 +625,8 @@ SHADOW_MANIFEST_SHA256 = "0d82b0085b27187605e70cbee609cb0100a77303d314054a788c30
 SHADOW_MANIFEST_BYTES = 3_452
 CONTINUITY_FILE = os.path.join(_BOT_DIR, "shadow_continuity.json")
 _LEGACY_CONTINUITY_SCHEMA = "shadow_continuity/2"
-_V389_CONTINUITY_SCHEMA = "shadow_continuity/3"
+# shadow_continuity/3 (V389) artifacts are deliberately NOT importable:
+# only this build's /4 dated-ledger continuity is accepted.
 CONTINUITY_SCHEMA = "shadow_continuity/4"
 CONTINUITY_EXPORT_NY17_GUARD_S = 5 * 60
 
@@ -17024,8 +17025,11 @@ def _controller_ledger_absorb_backfill(st, authority, gap_records):
         return False
     ledger = st.get("_controller_ledger")
     if ledger is not None and not _valid_controller_ledger(ledger):
-        st.pop("_controller_ledger", None)
-        ledger = None
+        # A malformed dated ledger is evidence of damage/tampering.  It is
+        # never silently rebuilt here; the install path's refusal keeps
+        # no-new-risk latched until the recovery image is restored or a
+        # fresh lifecycle is started.
+        return False
     if ledger is None and not _controller_ledger_bootstrap_from_seed(
             st, authority):
         return False
@@ -34306,6 +34310,17 @@ def _consume_operator_pause_requests(st):
                 log("*** OPERATOR RESUME held: safety records must validate "
                     "before the pause clears")
                 return
+            stronger = [key for key in (
+                "_close_only_halt", "_target_hit", "_target_flat_watch",
+                "_ledger_recovery_halt", "_safety_recovery_pending",
+            ) if key in st]
+            if stronger or _r4_migration_required(st):
+                _log_throttled(
+                    "*** OPERATOR RESUME held: a stronger halt is present ("
+                    + ", ".join(stronger or ["r4 migration pending"])
+                    + ") — the durable pause stays until it clears",
+                    key="operator resume stronger halt", window=300)
+                return
             work = copy.deepcopy(st)
             work.pop("_pause_new_risk", None)
             if save_state(work) and save_state(work):
@@ -35570,9 +35585,57 @@ def _r4_commit_migration(st):
     return True
 
 
+def _r4_migration_custody_rails(st):
+    """Loss rails while the one-time migration owns startup.
+
+    The migration may wait (closed market, unresolved broker order, an
+    unmappable ticket) while the adopted account still holds live r4
+    exposure.  Every wait pass therefore re-reads the bound account and
+    enforces the SOURCE's own retained loss lines read-only: no anchor
+    roll, no stand-down write, no ledger mutation — a breach only ever
+    REDUCES exposure (account-wide flatten), which is always authorized.
+    """
+    try:
+        ai = _verified_account_info("r4 migration custody rails")
+    except SystemExit:
+        raise
+    except Exception:
+        ai = None
+    if ai is None:
+        return
+    equity = getattr(ai, "equity", None)
+    if not _finite_num(equity):
+        return
+    br = st.get("breaker") if isinstance(st, dict) else None
+    anchor = br.get("anchor") if isinstance(br, dict) else None
+    binding = _economic_binding(st)
+    breaker_bps = (binding.get("breaker_bps")
+                   if isinstance(binding, dict) else None)
+    lines = [value for value in (
+        _translated_floor_line(st),
+        _translated_loss_line(anchor, breaker_bps, st),
+        _translated_loss_line(anchor, 500, st),
+    ) if _finite_num(value)]
+    if not lines or float(equity) > max(lines):
+        return
+    log(f"*** R4 MIGRATION CUSTODY RAIL: equity {float(equity):,.2f} at/"
+        f"below the retained source loss line {max(lines):,.2f} — closing "
+        "all account exposure now; the migration itself stays untouched")
+    try:
+        flatten_all("r4 migration custody rail", require_account_flat=True)
+    except Exception as exc:
+        log(f"*** r4 custody rail flatten error {type(exc).__name__}: "
+            f"{exc} — retried on the next migration pass")
+
+
 def _advance_r4_migration(st):
     """One bounded migration attempt; returns committed/wait/refused."""
     committed = st.get("_r4_migration") if isinstance(st, dict) else None
+    if not (isinstance(committed, dict)
+            and committed.get("stage") == "COMMITTED"):
+        # Custody-first: rails precede every proof/wait path so a waiting
+        # migration can never leave live source exposure unenforced.
+        _r4_migration_custody_rails(st)
     if (isinstance(committed, dict)
             and committed.get("stage") == "COMMITTED"):
         if not _valid_r4_migration(committed, st):

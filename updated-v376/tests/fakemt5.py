@@ -150,6 +150,13 @@ class FakeMT5:
         rows = list(self.deals)
         if "position" in kw:
             rows = [d for d in rows if d.position_id == kw["position"]]
+        if len(span) == 2:
+            try:
+                lo = span[0].timestamp()
+                hi = span[1].timestamp()
+                rows = [d for d in rows if lo <= float(d.time) <= hi]
+            except Exception:
+                pass
         return tuple(rows)
 
     def history_orders_get(self, *span, **kw):

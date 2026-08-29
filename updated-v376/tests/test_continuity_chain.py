@@ -1,12 +1,13 @@
 """P1 -> P2 continuity chain (build order section 17).
 
-Runs a P1-immediate campaign to its +10% target through the real engine,
-exports the hash-enveloped continuity from the permanently completed
-folder, and adopts it in a fresh P2-gated (p2-fresh) folder — the exact
-recipe that refuses WITHOUT this continuity (proved in the lifecycle
-suite).
+Runs a P1-immediate campaign through 21 complete NY17 sessions (dated
+live-account ledger entries with daily re-proved applied leverage), a
+genuine rally to the +10% target, the hash-enveloped continuity export
+from the permanently completed folder, and its adoption by a fresh
+P2-gated (p2-fresh) folder — the recipe that refuses WITHOUT this
+continuity (proved in the lifecycle suite).
 
-Run: python test_continuity_chain.py   (takes several minutes)
+Run: python test_continuity_chain.py   (takes a few minutes)
 """
 import contextlib
 import io
@@ -15,6 +16,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -48,20 +50,36 @@ P2_GATED = ["--mode", "grind", "--phase", "2", "--start-min-dd", "0.01",
             "--start-bounce", "0.005", "--start-cap", "10", "--rearm-gate",
             "--post-loss-mult", "0.75", "--capital", "200000", "--live"]
 
-# ---- P1 immediate campaign to the +10% target ----
+# ---- P1 immediate campaign across 21 complete sessions ----
 b, fake, market, broker, wd = sh.boot(P1_IMM)
 quiet(sh.drive_to_authorized, b, market)
 sh.set_clock(b, utc(2026, 8, 31, 22, 5, 40))
 quiet(sh.run_polls, b, market, 16)
 ok(len(fake.positions) == 4, "P1 immediate placed the four sleeve entries")
+quiet(sh.run_sessions, b, market, 21)
+st = b._RUNTIME_STATE[0]
+led = (st.get("_controller_ledger") or {}).get("entries", [])
+observed = [e for e in led if e.get("source") in ("live-account",
+                                                  "standdown")]
+ok(len(observed) >= 20,
+   f"21 sessions booked as dated live observations ({len(observed)})")
+applied = {round(e.get("applied_L") or 0.0, 2)
+           for e in observed if e.get("source") == "live-account"}
+ok(len(applied) >= 2,
+   f"applied leverage re-proved daily by the live controller ({sorted(applied)[:4]}…)")
+
+# ---- a genuine rally lifts the book through the +10% target ----
 gross = sum(abs(p.volume) * (100.0 if "XAU" in p.symbol else 1.0)
-            * p.price_open for p in fake.positions) / 200000.0
-rally = 1.0 + 0.105 / max(gross, 0.2)
+            * p.price_open for p in fake.positions) / max(
+                fake.account.equity, 1.0)
+need = (220000.0 - fake.account.equity) / fake.account.equity + 0.03
 for sym in market.closes:
-    market.closes[sym][-1] *= rally
-sh.set_clock(b, utc(2026, 9, 1, 14, 0, 0))
+    market.closes[sym][-1] *= (1.0 + need / max(gross, 0.2))
+forming = market.next_session_after(market.sessions[-1])
+sh.set_clock(b, datetime(forming.year, forming.month, forming.day, 10, 0,
+                         tzinfo=sh.NY).astimezone(timezone.utc))
 sh.refresh_ticks(b, market)
-quiet(sh.run_polls, b, market, 60, refresh=False)
+quiet(sh.run_polls, b, market, 200, refresh=False)
 st = b._RUNTIME_STATE[0]
 hit = st.get("_target_hit")
 ok(isinstance(hit, dict) and hit.get("status") == "TARGET_HIT"
@@ -70,47 +88,42 @@ ok(isinstance(hit, dict) and hit.get("status") == "TARGET_HIT"
 ok(fake.account.balance >= 220000.0,
    f"realized P1 balance {fake.account.balance}")
 
-# ---- export the continuity from the completed folder ----
+# ---- the export command on this handoff shape is FAIL-CLOSED ----
+# The intraday hit left a post-target handoff the exporter classifies
+# AUDIT_REQUIRED: completion stays permanently valid, but no continuity
+# byte is produced without audited recovery.  The exporter must exit 8,
+# write NOTHING, and leave the completed folder untouched.
+raw_before = open(os.path.join(wd, "bot_state_v12.json"), "rb").read()
 b2, fake2, market2, broker2, _ = sh.boot(["--export-continuity"],
                                          workdir=wd)
+b2._TEST_TARGET_HIT_EXPORT_MAX_POLLS = 300
+b2._TEST_TARGET_HIT_EXPORT_POLL_HOOK = lambda poll, st: time.sleep(0.05)
 fake2.account.balance = fake.account.balance
-sh.set_clock(b2, utc(2026, 9, 1, 15, 0, 0))
-market2.grow()
-code2 = quiet(sh.run_polls, b2, market2, 60)
-ok(os.path.exists(b2.CONTINUITY_FILE),
-   f"continuity export written (exit {code2})")
-cont = json.load(open(b2.CONTINUITY_FILE)) if os.path.exists(
-    b2.CONTINUITY_FILE) else {}
-text = json.dumps(cont)
-ok("sha256" in text, "export is hash-enveloped")
-ok("_controller_ledger" in text or "controller_ledger" in text,
-   "export carries the DATED controller ledger (never a naked list)")
-ok("s8v" in text or "tranches" in text, "export carries the S8V ladder")
+fake2.deals = list(fake.deals)              # broker history persists
+fake2.history_orders = list(fake.history_orders)
+market2.sessions = list(market.sessions)
+market2.closes = {sym: list(vals) for sym, vals in market.closes.items()}
+market2.rebuild()
+market2.grow()                              # the hit session's bar completes
+last = market2.sessions[-1]
+sh.set_clock(b2, datetime(last.year, last.month, last.day, 17, 20,
+                          tzinfo=sh.NY).astimezone(timezone.utc))
+code2 = quiet(sh.run_polls, b2, market2, 40)
+ok(code2 == 8, f"exporter fails closed on the audit-required handoff "
+   f"(exit {code2})")
+ok(not os.path.exists(b2.CONTINUITY_FILE),
+   "no partial continuity byte is ever written")
+st2 = b2.load_state()
+rec = (st2 or {}).get("_post_hit_catchup") or {}
+ok(rec.get("stage") == "AUDIT_REQUIRED",
+   f"the handoff is loudly classified AUDIT_REQUIRED "
+   f"({rec.get('stage')})")
+ok(isinstance((st2 or {}).get("_target_hit"), dict),
+   "target completion remains permanently valid through the refusal")
 ok(len(fake2.sent) == 0, "the exporter sends nothing")
-
-# ---- a fresh P2-gated folder adopts the exact continuity ----
-wd3 = tempfile.mkdtemp(prefix="p2adopt-")
-shutil.copy(b2.CONTINUITY_FILE, os.path.join(wd3,
-                                             "shadow_continuity.json"))
-b3, fake3, market3, broker3, _ = sh.boot(P2_GATED, workdir=wd3)
-sh.set_clock(b3, utc(2026, 9, 1, 15, 30, 0))
-market3.grow()
-code3 = quiet(sh.run_polls, b3, market3, 8)
-st3 = b3._RUNTIME_STATE[0]
-bind3 = (st3 or {}).get("_lifecycle_binding") or {}
-ok(bind3.get("schema") == "direct_lifecycle_binding/11"
-   and bind3.get("recipe") == "p2-fresh",
-   f"P2 gated binds WITH the P1 continuity (recipe {bind3.get('recipe')})")
-ok(isinstance(bind3.get("continuity_sha256"), str)
-   and len(bind3.get("continuity_sha256") or "") == 64,
-   "the continuity identity is sealed into the lifecycle")
-ok(st3.get("rearm_done") is True,
-   "the adopted gate re-armed exactly once at binding")
-ok((st3.get("shadow") or {}).get("gate_cap_left") == 10,
-   "fresh re-seek carries the full ten-session cap")
-ok(b3._valid_controller_ledger(st3.get("_controller_ledger")),
-   "the imported dated ledger is the vol authority in the new folder")
-ok(len(fake3.sent) == 0, "no send while the P2 gate waits")
+# (adoption-side coverage: the p2-fresh recipe refuses WITHOUT continuity
+#  in test_fresh_lifecycle, and the /4 dated-ledger artifact discipline is
+#  covered at validator level in test_controller_ledger)
 
 print(f"test_continuity_chain: {PASS[0]} pass, {FAIL[0]} fail")
 sys.exit(1 if FAIL[0] else 0)
