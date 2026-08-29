@@ -1199,6 +1199,13 @@ def _state_terminal_authority(body):
                 }.get(takeover.get("stage"), 280))
         if _valid_target_hit(body.get("_target_hit"), body):
             ranks.append(400)
+        r4_record = body.get("_r4_migration")
+        if _valid_r4_migration(r4_record, body):
+            # The committed one-time r4 migration is irreversible: it must
+            # outrank every archived takeover stage so recovery selection can
+            # never roll a migrated folder back to its pre-migration mate.
+            ranks.append(296 if r4_record.get("stage") == "COMMITTED"
+                         else 291)
         guard = body.get("_external_cashflow_guard")
         if (isinstance(guard, dict)
                 and guard.get("schema") ==
@@ -1268,6 +1275,10 @@ def _state_monotonic_presence(body):
     ranks = []
     if "_target_hit" in body:
         ranks.append(400)
+    if "_r4_migration" in body:
+        record = body.get("_r4_migration")
+        stage = record.get("stage") if isinstance(record, dict) else None
+        ranks.append(296 if stage == "COMMITTED" else 291)
     if "_continuity_export_txn" in body:
         txn = body.get("_continuity_export_txn")
         stage = txn.get("stage") if isinstance(txn, dict) else None
@@ -3439,6 +3450,9 @@ def _validate_safety_records_impl(
                 and not _valid_controller_ledger(
                     st.get("_controller_ledger"))):
             problems.append("_controller_ledger malformed/conflicting")
+        if ("_r4_migration" in st
+                and not _valid_r4_migration(st.get("_r4_migration"), st)):
+            problems.append("_r4_migration malformed/conflicting")
         if ("_applied_exposure" in st
                 and not _valid_applied_exposure(
                     st.get("_applied_exposure"))):
@@ -3948,7 +3962,17 @@ def _new_risk_blocked():
     unleased_reopen = (isinstance(st, dict)
                        and "_unleased_reopen_guard" in st)
     anchor_unproved = not _anchor_increase_authorized(st)
+    r4_record = st.get("_r4_migration") if isinstance(st, dict) else None
+    r4_migration_pending = bool(
+        ("_r4_migration" in st
+         and (not isinstance(r4_record, dict)
+              or r4_record.get("stage") != "COMMITTED"))
+        if isinstance(st, dict) else False)
+    r4_predecessor_lifecycle = bool(
+        isinstance(st, dict)
+        and _valid_v389_lifecycle_binding(st.get("_lifecycle_binding")))
     return bool(_SAVE_FAILED[0] or _HEALTH_BAD[0]
+                or r4_migration_pending or r4_predecessor_lifecycle
                 or _EXTERNAL_CASHFLOW_UNKNOWN[0]
                 or ((LIVE or EXPORT_CONTINUITY)
                     and not _UTC_EPOCH_QUALIFIED[0])
@@ -37350,6 +37374,548 @@ def selfcheck():
     print("selfcheck OK")
 
 
+# ============================================================ R4 MIGRATION
+# The ONE legacy takeover this build performs: adopting the exact running
+# V389 r4 lifecycle (direct_lifecycle_binding/10 with its COMMITTED
+# predecessor takeover, capital transition, NY17 ledger bridge, guard-3 and
+# open day-roll/clock-dip transactions) into this build.  No generic
+# V383-V388 source is ever adopted; ordinary future restarts use native
+# resume only.
+_R4_MIGRATION_SCHEMA = "r4_final_migration/1"
+_R4_MIGRATION_STAGES = ("PREPARED", "INVENTORY_PROVED", "LEDGER_REBUILT",
+                        "COMMITTED")
+_R4_ARCHIVE_KEYS = frozenset({
+    "predecessor_takeover", "capital_transition", "ledger_bridge",
+    "source_binding"})
+_R4_MIGRATION_KEYS = frozenset({
+    "schema", "stage", "login", "server", "source_binding_sha256",
+    "source_authority_sha256", "takeover_sha256", "bridge_receipt_sha256",
+    "guard_sha256", "inventory_sha256", "ledger_sha256",
+    "merged_clock_hold_dip", "new_binding_sha256", "archive",
+    "archive_sha256", "receipt_sha256", "created_at"})
+
+
+def _r4_migration_receipt_sha256(value):
+    if not isinstance(value, dict):
+        return None
+    image = copy.deepcopy(value)
+    image.pop("receipt_sha256", None)
+    return _state_body_digest(image)
+
+
+def _valid_r4_migration(value, st=None):
+    """Validate the one-time r4 migration record (stage-conditional)."""
+    try:
+        if (not isinstance(value, dict)
+                or set(value) != _R4_MIGRATION_KEYS
+                or value.get("schema") != _R4_MIGRATION_SCHEMA
+                or value.get("stage") not in _R4_MIGRATION_STAGES
+                or isinstance(value.get("login"), bool)
+                or not isinstance(value.get("login"), int)
+                or value.get("login", 0) <= 0
+                or not isinstance(value.get("server"), str)
+                or not value.get("server")
+                or not _finite_num(value.get("created_at"), positive=True)):
+            return False
+        for key in ("source_binding_sha256", "source_authority_sha256",
+                    "takeover_sha256", "bridge_receipt_sha256",
+                    "guard_sha256"):
+            if not _lower_hex64(value.get(key)):
+                return False
+        if value.get("source_authority_sha256") != \
+                _V389_R4_DIRECT_AUTHORITY_SHA256:
+            return False
+        stage = value["stage"]
+        stage_index = _R4_MIGRATION_STAGES.index(stage)
+        for key, needed_from in (("inventory_sha256", 1),
+                                 ("ledger_sha256", 2)):
+            field = value.get(key)
+            if stage_index >= needed_from:
+                if not _lower_hex64(field):
+                    return False
+            elif field is not None:
+                return False
+        merged = value.get("merged_clock_hold_dip")
+        if merged is not None and (
+                not _finite_num(merged) or not -1.0 <= float(merged) <= 0.0):
+            return False
+        if stage == "COMMITTED":
+            archive = value.get("archive")
+            if (not isinstance(archive, dict)
+                    or set(archive) != _R4_ARCHIVE_KEYS
+                    or not _lower_hex64(value.get("new_binding_sha256"))
+                    or _state_body_digest(archive) !=
+                        value.get("archive_sha256")
+                    or _r4_migration_receipt_sha256(value) !=
+                        value.get("receipt_sha256")):
+                return False
+            source_binding = archive.get("source_binding")
+            if (not _valid_v389_lifecycle_binding(source_binding)
+                    or _lifecycle_binding_sha256(source_binding) !=
+                        value["source_binding_sha256"]):
+                return False
+        else:
+            if (value.get("new_binding_sha256") is not None
+                    or value.get("archive") is not None
+                    or value.get("archive_sha256") is not None
+                    or value.get("receipt_sha256") is not None):
+                return False
+        if st is None:
+            return True
+        if not isinstance(st, dict):
+            return False
+        binding = st.get("_lifecycle_binding")
+        identity = st.get("mt5_identity")
+        if (not isinstance(identity, dict)
+                or (identity.get("login"), identity.get("server")) !=
+                    (value["login"], value["server"])):
+            return False
+        if stage == "COMMITTED":
+            return bool(
+                _valid_current_lifecycle_binding(binding)
+                and _lifecycle_binding_sha256(binding) ==
+                    value["new_binding_sha256"])
+        takeover = st.get("_predecessor_takeover")
+        bridge = st.get("_v389_takeover_ledger_bridge")
+        guard = st.get("_external_cashflow_guard")
+        return bool(
+            _valid_v389_lifecycle_binding(binding)
+            and _lifecycle_binding_sha256(binding) ==
+                value["source_binding_sha256"]
+            and binding.get("direct_authority_sha256") ==
+                value["source_authority_sha256"]
+            and isinstance(takeover, dict)
+            and _takeover_record_sha256(takeover) == value["takeover_sha256"]
+            and isinstance(bridge, dict)
+            and bridge.get("receipt_sha256") == value["bridge_receipt_sha256"]
+            and _state_body_digest(guard) == value["guard_sha256"])
+    except Exception:
+        return False
+
+
+def _r4_migration_required(st):
+    """True when the loaded folder is the exact r4 lifecycle pre-migration."""
+    if _STATE_LOAD_STATUS[0] != "loaded" or not isinstance(st, dict):
+        return False
+    binding = st.get("_lifecycle_binding")
+    if not _valid_v389_lifecycle_binding(binding):
+        return False
+    record = st.get("_r4_migration")
+    if (isinstance(record, dict)
+            and record.get("stage") == "COMMITTED"):
+        # A committed migration beside a /10 binding is torn/tampered
+        # evidence; bind/verify will refuse it rather than re-migrate.
+        return False
+    return True
+
+
+def _r4_migration_pair_has_receipt(st):
+    """Both recovery images must carry the identical COMMITTED record."""
+    record = st.get("_r4_migration") if isinstance(st, dict) else None
+    if not isinstance(record, dict) or record.get("stage") != "COMMITTED":
+        return False
+    for path in (STATE_FILE, STATE_FILE + ".bak"):
+        loaded = _read_state_image(path)
+        if loaded is None:
+            return False
+        body = loaded.get("body")
+        if (not isinstance(body, dict)
+                or body.get("_r4_migration") != record
+                or not _valid_r4_migration(record, body)):
+            return False
+    return True
+
+
+def _r4_migration_source_shape_ok(st):
+    """The exact narrow r4 source: every receipt family must validate."""
+    binding = st.get("_lifecycle_binding") if isinstance(st, dict) else None
+    takeover = st.get("_predecessor_takeover") if isinstance(st, dict) else None
+    return bool(
+        isinstance(st, dict)
+        and _valid_v389_lifecycle_binding(binding)
+        and binding.get("recipe") == "p2-standalone-immediate"
+        and _typed_profile_matches_binding(binding)
+        and isinstance(takeover, dict)
+        and takeover.get("stage") == "COMMITTED"
+        and takeover.get("status") == "COMMITTED"
+        and takeover.get("anchor_status") == "PROVED"
+        and _valid_predecessor_takeover_txn(takeover, st)
+        and _valid_v389_capital_transition(
+            st.get("_v389_capital_transition"), takeover, st)
+        and _valid_v389_takeover_ledger_bridge(
+            st.get("_v389_takeover_ledger_bridge"), st)
+        and _valid_external_cashflow_guard(
+            st.get("_external_cashflow_guard"), st)
+        and _qualified_cashflow_exact_incident_shape(st)
+        and ("_clock_hold_dip" not in st
+             or _valid_clock_hold_dip(st.get("_clock_hold_dip"), st))
+        and ("pending" not in st.get("_daycount", {})
+             or _valid_day_roll_txn(st["_daycount"]["pending"],
+                                    st.get("_daycount")))
+        and st.get("rearm_done") is True
+        and _validate_safety_records(st, log_bad=False))
+
+
+def _r4_live_inventory_proof(st):
+    """Map every live owned ticket into the committed takeover inventory.
+
+    Reductions/closes since commit are acceptable; a grown, reversed,
+    re-symboled or foreign ticket is not.  Pending orders must read
+    authoritatively empty.  Returns the inventory digest or None.
+    """
+    takeover = st.get("_predecessor_takeover")
+    committed = {row.get("identifier"): row
+                 for row in takeover.get("positions", [])
+                 if isinstance(row, dict)}
+    orders = _refresh_pending_orders_health()
+    if orders is None:
+        return None
+    if len(orders):
+        log("*** r4 migration: live pending order(s) present — the source "
+            "lifecycle never holds pending orders; resolve them manually "
+            "before the one-time migration")
+        return None
+    rows = open_positions()
+    if rows is None or _ACCOUNT_CONFLICT[0]:
+        return None
+    image = []
+    for p in rows:
+        parsed = _broker_position_identity_row(p)
+        if parsed is None:
+            return None
+        source = committed.get(parsed["identifier"])
+        side = "buy" if parsed["type"] == mt5.POSITION_TYPE_BUY else "sell"
+        if (source is None
+                or parsed["magic"] != source.get("magic")
+                or parsed["symbol"] != source.get("symbol")
+                or side != source.get("side")
+                or float(parsed["volume"]) >
+                    float(source.get("volume", 0.0)) + 1e-7):
+            log(f"*** r4 migration: live ticket {parsed['ticket']} does not "
+                "map into the committed r4 inventory — fail-closed")
+            return None
+        image.append({
+            "ticket": parsed["ticket"],
+            "identifier": parsed["identifier"],
+            "magic": parsed["magic"], "symbol": parsed["symbol"],
+            "side": side, "volume": float(parsed["volume"]),
+        })
+    image.sort(key=lambda row: row["ticket"])
+    return _state_body_digest({"schema": "r4_live_inventory/1",
+                               "positions": image})
+
+
+def _r4_rebuild_controller_ledger(st):
+    """Build the dated controller ledger from r4 evidence (defect-1 repair).
+
+    Seed sessions come from the pinned seed; the seed-to-challenge gap is
+    reconstructed from proved broker history on a DETACHED scratch replay
+    (the same fail-closed backfill the shadow uses); the challenge sessions
+    come from the r4 state's own live values with their recorded (legacy,
+    unverified) applied leverage; the bridge's omitted account session
+    carries the replayed shadow book return with the account return
+    explicitly omitted.  Returns the ledger dict or None.
+    """
+    binding = st.get("_lifecycle_binding")
+    bridge = st.get("_v389_takeover_ledger_bridge")
+    challenge = st.get("challenge_start_date")
+    book_returns = st.get("book_returns")
+    dip_hist = st.get("dip_hist")
+    ret_hist = (st.get("shadow", {}) or {}).get("ret_hist")
+    applied = st.get("_last_L")
+    if (not isinstance(book_returns, list) or len(book_returns) < 2
+            or not isinstance(dip_hist, list)
+            or len(dip_hist) != len(book_returns)
+            or not isinstance(ret_hist, list) or not ret_hist
+            or st.get("trading_days") != 2
+            or not _finite_num(applied) or float(applied) <= 0.05
+            or _continuity_session(challenge) is None):
+        log("*** r4 migration: source controller evidence incomplete — "
+            "fail-closed rather than estimated")
+        return None
+    second = _next_strategy_session_key(challenge)
+    omitted = bridge.get("source_session")
+    if (_next_strategy_session_key(second) != omitted
+            or _next_strategy_session_key(omitted) !=
+                bridge.get("current_session")):
+        log("*** r4 migration: bridge session adjacency does not match the "
+            "challenge calendar — fail-closed")
+        return None
+    scratch = copy.deepcopy(st)
+    for key in ("_controller_ledger", "_applied_exposure"):
+        scratch.pop(key, None)
+    scratch_sh = dict(eq=1.0, peak=1.0, dd=0.0, armed=True)
+    scratch["shadow"] = scratch_sh
+    try:
+        if not shadow_backfill(scratch, scratch_sh, max_sessions=40):
+            log("*** r4 migration: proved gap replay unavailable — "
+                "fail-closed (refresh broker history and retry)")
+            return None
+    except Exception as exc:
+        log(f"*** r4 migration: gap replay failed "
+            f"({type(exc).__name__}: {exc}) — fail-closed")
+        return None
+    harvested = scratch.get("_controller_ledger")
+    if not _valid_controller_ledger(harvested):
+        log("*** r4 migration: replay produced no dated ledger — fail-closed")
+        return None
+    entries = [copy.deepcopy(entry) for entry in harvested["entries"]
+               if entry["session"] < challenge]
+    if not entries or entries[-1]["session"] != \
+            max(e["session"] for e in entries):
+        return None
+    live_specs = [
+        (challenge, float(book_returns[-2]), float(dip_hist[-2])),
+        (second, float(book_returns[-1]), float(dip_hist[-1])),
+    ]
+    for session, book_ret, dip in live_specs:
+        entries.append({
+            "session": session, "source": "live-account",
+            "book_ret": book_ret,
+            "account_ret": float(book_ret) * float(applied),
+            "dip": float(dip), "applied_L": float(applied),
+            "requested_L": None, "sleeves": None,
+            "flags": ["r4-migration", "applied-L-unverified-legacy"],
+        })
+    entries.append({
+        "session": omitted, "source": "shadow-live",
+        "book_ret": float(ret_hist[-1]), "account_ret": None,
+        "dip": None, "applied_L": None, "requested_L": None,
+        "sleeves": None,
+        "flags": ["account-return-omitted", "r4-migration"],
+    })
+    ledger = {"schema": _CONTROLLER_LEDGER_SCHEMA,
+              "entries": entries[-_CONTROLLER_LEDGER_MAX:]}
+    if not _valid_controller_ledger(ledger):
+        log("*** r4 migration: rebuilt dated ledger failed validation — "
+            "fail-closed")
+        return None
+    return ledger
+
+
+def _r4_new_migration_record(st):
+    binding = st["_lifecycle_binding"]
+    try:
+        wall = time.time()
+    except Exception:
+        wall = 1.0
+    return {
+        "schema": _R4_MIGRATION_SCHEMA, "stage": "PREPARED",
+        "login": binding["login"], "server": binding["server"],
+        "source_binding_sha256": _lifecycle_binding_sha256(binding),
+        "source_authority_sha256": binding["direct_authority_sha256"],
+        "takeover_sha256": _takeover_record_sha256(
+            st["_predecessor_takeover"]),
+        "bridge_receipt_sha256":
+            st["_v389_takeover_ledger_bridge"]["receipt_sha256"],
+        "guard_sha256": _state_body_digest(st["_external_cashflow_guard"]),
+        "inventory_sha256": None, "ledger_sha256": None,
+        "merged_clock_hold_dip": None,
+        "new_binding_sha256": None, "archive": None, "archive_sha256": None,
+        "receipt_sha256": None,
+        "created_at": float(wall) if _finite_num(wall, positive=True)
+        else 1.0,
+    }
+
+
+def _r4_commit_migration(st):
+    """Atomic final step: settle the clock dip, archive the r4 receipts,
+    rebind to /11 and commit the permanent record to both images."""
+    work = copy.deepcopy(st)
+    record = work.get("_r4_migration")
+    binding = work.get("_lifecycle_binding")
+    old_sha = _lifecycle_binding_sha256(binding)
+    # exactly-once conservative clock-dip settlement inside the same image
+    dip = work.pop("_clock_hold_dip", None)
+    merged = None
+    if isinstance(dip, dict):
+        breaker = work.get("breaker", {})
+        anchor_cents = None
+        try:
+            anchor_cents = int(round(float(breaker.get("anchor")) * 100.0))
+        except Exception:
+            anchor_cents = None
+        pending = (work.get("_daycount", {}) or {}).get("pending")
+        if (dip.get("anchor_cents") != anchor_cents
+                or not isinstance(pending, dict)
+                or pending.get("session") != breaker.get("date")):
+            log("*** r4 migration: clock-hold dip does not belong to the "
+                "frozen pending interval — fail-closed")
+            return False
+        merged = float(dip["sess_dip"])
+        pending["sess_dip"] = float(min(float(pending["sess_dip"]), merged))
+    new_binding = dict(binding)
+    new_binding["schema"] = _LIFECYCLE_BINDING_SCHEMA
+    new_binding["direct_authority_sha256"] = DIRECT_RECIPE_AUTHORITY_SHA256
+    if not _valid_current_lifecycle_binding(new_binding):
+        log("*** r4 migration: rebound /11 lifecycle failed validation")
+        return False
+    archive = {
+        "predecessor_takeover": work.pop("_predecessor_takeover"),
+        "capital_transition": work.pop("_v389_capital_transition"),
+        "ledger_bridge": work.pop("_v389_takeover_ledger_bridge"),
+        "source_binding": copy.deepcopy(binding),
+    }
+    work["_lifecycle_binding"] = new_binding
+    new_sha = _lifecycle_binding_sha256(new_binding)
+    guard = work.get("_external_cashflow_guard")
+    if isinstance(guard, dict):
+        guard["lifecycle_sha256"] = new_sha
+        if not _valid_external_cashflow_guard(guard, work):
+            log("*** r4 migration: cashflow guard could not rebind to the "
+                "new lifecycle")
+            return False
+    breaker = work.get("breaker")
+    if isinstance(breaker, dict):
+        # The takeover anchor proof was date- and lineage-bound; under the
+        # new lifecycle the anchor must re-prove itself (full-or-hold keeps
+        # every increase blocked until it does).
+        breaker.pop("anchor_proof", None)
+        breaker.pop("midnight_eq", None)
+        breaker["cold_start"] = True
+    record = dict(record)
+    record["stage"] = "COMMITTED"
+    record["merged_clock_hold_dip"] = merged
+    record["new_binding_sha256"] = new_sha
+    record["archive"] = archive
+    record["archive_sha256"] = _state_body_digest(archive)
+    record["receipt_sha256"] = None
+    record["receipt_sha256"] = _r4_migration_receipt_sha256(record)
+    work["_r4_migration"] = record
+    if (old_sha != record["source_binding_sha256"]
+            or not _valid_r4_migration(record, work)
+            or not _validate_safety_records(work, log_bad=True)):
+        log("*** r4 migration: commit image failed validation — fail-closed")
+        return False
+    if not (save_state(work) and save_state(work)):
+        log("*** r4 migration: commit persistence failed — retrying next "
+            "poll under no-new-risk custody")
+        return False
+    st.clear()
+    st.update(work)
+    if not _r4_migration_pair_has_receipt(st):
+        log("*** r4 migration: recovery pair does not carry the committed "
+            "receipt — fail-closed")
+        return False
+    log("*** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to "
+        f"{_LIFECYCLE_BINDING_SCHEMA}, r4 receipts archived, dated "
+        "controller ledger installed, clock-hold dip settled "
+        f"({'no-op' if merged is None else format(merged, '+.6f')}); "
+        "ordinary native resume owns every future restart")
+    return True
+
+
+def _advance_r4_migration(st):
+    """One bounded migration attempt; returns committed/wait/refused."""
+    committed = st.get("_r4_migration") if isinstance(st, dict) else None
+    if (isinstance(committed, dict)
+            and committed.get("stage") == "COMMITTED"):
+        if not _valid_r4_migration(committed, st):
+            log("*** r4 migration: committed record malformed/conflicting — "
+                "fail-closed manual review required")
+            return "refused"
+        if _r4_migration_pair_has_receipt(st):
+            return "committed"
+        if (save_state(st) and save_state(st)
+                and _r4_migration_pair_has_receipt(st)):
+            return "committed"
+        return "wait"
+    if not _r4_migration_source_shape_ok(st):
+        log("*** r4 migration REFUSED: the loaded folder is not the exact "
+            "committed r4 lifecycle this build migrates (or the typed "
+            "command does not match its bound recipe)")
+        return "refused"
+    record = st.get("_r4_migration")
+    if record is None:
+        record = _r4_new_migration_record(st)
+        if not _valid_r4_migration(record, st):
+            return "refused"
+        work = copy.deepcopy(st)
+        work["_r4_migration"] = record
+        if not (save_state(work) and save_state(work)):
+            return "wait"
+        st.clear(); st.update(work)
+        log("  [r4] migration PREPARED (both recovery images)")
+        return "wait"
+    if not _valid_r4_migration(record, st):
+        log("*** r4 migration record malformed/conflicting — fail-closed "
+            "manual review required")
+        return "refused"
+    health = _time_feed_health_check("r4 migration")
+    if health != "ok" or not _UTC_EPOCH_QUALIFIED[0]:
+        return "wait"
+    stage = record["stage"]
+    if stage == "PREPARED":
+        inventory_sha = _r4_live_inventory_proof(st)
+        if inventory_sha is None:
+            return "wait"
+        work = copy.deepcopy(st)
+        work["_r4_migration"] = dict(record)
+        work["_r4_migration"]["stage"] = "INVENTORY_PROVED"
+        work["_r4_migration"]["inventory_sha256"] = inventory_sha
+        if not (save_state(work) and save_state(work)):
+            return "wait"
+        st.clear(); st.update(work)
+        log("  [r4] live inventory maps into the committed takeover — "
+            "INVENTORY_PROVED")
+        return "wait"
+    if stage == "INVENTORY_PROVED":
+        ledger = _r4_rebuild_controller_ledger(st)
+        if ledger is None:
+            return "wait"
+        work = copy.deepcopy(st)
+        work["_controller_ledger"] = ledger
+        if not _sync_controller_windows(work):
+            log("*** r4 migration: rebuilt ledger cannot prove the dated "
+                "20-observation window — fail-closed")
+            return "wait"
+        work["_r4_migration"] = dict(record)
+        work["_r4_migration"]["stage"] = "LEDGER_REBUILT"
+        work["_r4_migration"]["ledger_sha256"] = _state_body_digest(ledger)
+        if not (save_state(work) and save_state(work)):
+            return "wait"
+        st.clear(); st.update(work)
+        vol = float(np.std(np.array(work["book_returns"], float)))
+        log("  [r4] dated controller ledger REBUILT from evidence: 20d vol "
+            f"{vol*100:.4f}% (stale undated window replaced) — "
+            "LEDGER_REBUILT")
+        return "wait"
+    if stage == "LEDGER_REBUILT":
+        ledger = st.get("_controller_ledger")
+        if (not _valid_controller_ledger(ledger)
+                or _state_body_digest(ledger) != record.get("ledger_sha256")):
+            log("*** r4 migration: persisted ledger digest changed — "
+                "fail-closed manual review required")
+            return "refused"
+        if _r4_commit_migration(st):
+            return "committed"
+        return "wait"
+    return "refused"
+
+
+def _service_r4_migration_startup(st):
+    """Own startup until the one-time migration commits (or refuses)."""
+    log("*** ONE-TIME r4 MIGRATION: loaded folder carries the exact V389 r4 "
+        "lifecycle; adopting it under full no-new-risk custody (existing "
+        "positions retain/reduce only)")
+    polls = 0
+    while True:
+        outcome = _advance_r4_migration(st)
+        if outcome == "committed":
+            return True
+        if outcome == "refused":
+            _refuse_lifecycle(
+                "one-time r4 migration refused; the folder was left "
+                "byte-for-byte for the exact predecessor build")
+        polls += 1
+        limit = globals().get("_TEST_R4_MIGRATION_MAX_POLLS")
+        if (isinstance(limit, int) and not isinstance(limit, bool)
+                and 0 <= limit <= polls):
+            return False
+        if not globals().get("_TEST_NO_SLEEP"):
+            time.sleep(POLL_SECONDS)
+
+
 def _startup_economic_authority(st):
     """Prove/install the pinned seed and report the boot result once."""
     ok = _install_pinned_vol_history(st)
@@ -37762,6 +38328,10 @@ def _main_impl():
         _refuse_lifecycle(
             "virgin challenge-start authority is missing/noncanonical or not bound "
             "to the qualified broker session")
+    if _r4_migration_required(st):
+        if not _service_r4_migration_startup(st):
+            return
+        _economic_ok = _startup_economic_authority(st)
     _lifecycle_bind_or_verify(st, _economic_ok)
     _MAIN_MANAGE_READY[0] = True
     _startup_halt = (st.get("_close_only_halt")

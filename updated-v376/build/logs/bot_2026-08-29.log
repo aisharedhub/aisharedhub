@@ -16,3 +16,169 @@
 2026-08-29 00:17:55 NY | *** controller ledger malformed — NO NEW RISK; restore the recovery image or start a fresh lifecycle
 2026-08-29 00:17:55 NY |   [applied] inventory != targets: proven daily leverage 2.00x recorded (requested 4.00x) — booked returns divide by what was actually applied
 2026-08-29 00:17:55 NY | *** POSITION INVENTORY UNKNOWN (positions_get returned None) — NO-NEW-RISK active; account-equity rails still run, but position-specific closes retry when readable
+2026-08-29 00:24:36 NY | *** controller ledger could not chain the booked session — dated economic authority QUARANTINED; no new risk until a shadow rebuild/backfill re-proves it
+2026-08-29 00:24:36 NY | *** live book-return authority became short/corrupt — NO NEW RISK until an inspected restart repairs it from the pinned full seed
+2026-08-29 00:24:36 NY | *** undated legacy return window is NOT economic authority — NO NEW RISK (the one-time r4 migration or a fresh lifecycle is required)
+2026-08-29 00:24:36 NY | *** controller ledger malformed — NO NEW RISK; restore the recovery image or start a fresh lifecycle
+2026-08-29 00:24:36 NY |   [applied] inventory != targets: proven daily leverage 2.00x recorded (requested 4.00x) — booked returns divide by what was actually applied
+2026-08-29 00:24:36 NY | *** POSITION INVENTORY UNKNOWN (positions_get returned None) — NO-NEW-RISK active; account-equity rails still run, but position-specific closes retry when readable
+2026-08-29 00:27:57 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:27:57 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:27:57 NY | *** [shadow] post-seed broker bridge M5 unreadable (ValueError: unqualified M5 broker epoch) — FAIL-CLOSED; refresh checkpoint
+2026-08-29 00:27:57 NY | *** r4 migration: proved gap replay unavailable — fail-closed (refresh broker history and retry)
+2026-08-29 00:28:07 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:28:07 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:28:07 NY | *** [shadow] checkpoint/broker authority preflight failed (current qualified NY17 session is unavailable) — FAIL-CLOSED before any shadow, gate, ladder, or session mutation
+2026-08-29 00:28:07 NY | *** r4 migration: proved gap replay unavailable — fail-closed (refresh broker history and retry)
+2026-08-29 00:28:24 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:28:24 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:28:25 NY | *** [shadow] checkpoint/broker authority preflight failed (US100.sim forming D1 identity is unavailable; joint-stale horizon cannot be excluded) — FAIL-CLOSED before any shadow, gate, ladder, or session mutation
+2026-08-29 00:28:25 NY | *** r4 migration: proved gap replay unavailable — fail-closed (refresh broker history and retry)
+2026-08-29 00:28:35 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:28:35 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:28:35 NY | *** [shadow] post-seed ORB evidence PENDING for 2026-08-10 (incomplete-m5-grid) — FAIL-CLOSED; refresh checkpoint or restore the complete M5 session grid
+2026-08-29 00:28:35 NY | *** r4 migration: proved gap replay unavailable — fail-closed (refresh broker history and retry)
+2026-08-29 00:29:20 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:20 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:20 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:20 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:20 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:20 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:20 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:20 NY | *** r4 migration REFUSED: the loaded folder is not the exact committed r4 lifecycle this build migrates (or the typed command does not match its bound recipe)
+2026-08-29 00:29:20 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:20 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:20 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:20 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:20 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:20 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:20 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:20 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:20 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:21 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:21 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:21 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:21 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:21 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:21 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:21 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:21 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:21 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:21 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:21 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:21 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:21 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:21 NY | *** EXCLUSIVE-ACCOUNT CONFLICT: 1 foreign, wrong-symbol, or malformed/unproved position(s) detected — ordinary rails do not auto-close them; target completion is account-wide; all new risk blocked
+2026-08-29 00:29:21 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:21 NY | *** r4 migration: live ticket 30956569 does not map into the committed r4 inventory — fail-closed
+2026-08-29 00:29:21 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:21 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:29 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:30 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:30 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:30 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:30 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:30 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:30 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:30 NY | *** r4 migration REFUSED: the loaded folder is not the exact committed r4 lifecycle this build migrates (or the typed command does not match its bound recipe)
+2026-08-29 00:29:30 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:30 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:30 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:30 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:30 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:30 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:30 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:30 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:30 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:30 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:30 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:30 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:30 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:31 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:31 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:31 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:31 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:31 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:31 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:31 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:31 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:31 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:31 NY | *** EXCLUSIVE-ACCOUNT CONFLICT: 1 foreign, wrong-symbol, or malformed/unproved position(s) detected — ordinary rails do not auto-close them; target completion is account-wide; all new risk blocked
+2026-08-29 00:29:31 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:31 NY | *** r4 migration: live ticket 30956569 does not map into the committed r4 inventory — fail-closed
+2026-08-29 00:29:31 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:31 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:46 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:46 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:46 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:46 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:46 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:46 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:46 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:46 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:46 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:47 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:47 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:47 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:47 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:47 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:47 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:47 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:47 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:47 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:47 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:47 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:47 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:47 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:47 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:29:47 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:29:47 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:29:47 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:29:47 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:29:47 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:29:48 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:48 NY | *** EXCLUSIVE-ACCOUNT CONFLICT: 1 foreign, wrong-symbol, or malformed/unproved position(s) detected — ordinary rails do not auto-close them; target completion is account-wide; all new risk blocked
+2026-08-29 00:29:48 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:48 NY | *** r4 migration: live ticket 30956569 does not map into the committed r4 inventory — fail-closed
+2026-08-29 00:29:48 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:29:48 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:30:06 NY | *** controller ledger could not chain the booked session — dated economic authority QUARANTINED; no new risk until a shadow rebuild/backfill re-proves it
+2026-08-29 00:30:06 NY | *** live book-return authority became short/corrupt — NO NEW RISK until an inspected restart repairs it from the pinned full seed
+2026-08-29 00:30:06 NY | *** undated legacy return window is NOT economic authority — NO NEW RISK (the one-time r4 migration or a fresh lifecycle is required)
+2026-08-29 00:30:06 NY | *** controller ledger malformed — NO NEW RISK; restore the recovery image or start a fresh lifecycle
+2026-08-29 00:30:07 NY |   [applied] inventory != targets: proven daily leverage 2.00x recorded (requested 4.00x) — booked returns divide by what was actually applied
+2026-08-29 00:30:07 NY | *** POSITION INVENTORY UNKNOWN (positions_get returned None) — NO-NEW-RISK active; account-equity rails still run, but position-specific closes retry when readable
+2026-08-29 00:30:07 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:30:07 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:30:07 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:30:07 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:30:07 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:30:07 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:30:07 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:30:07 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:30:07 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:30:07 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:30:07 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:30:07 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:30:07 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:30:07 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:30:08 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:30:08 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:30:08 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:30:08 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:30:08 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:30:08 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:30:08 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:30:08 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:30:08 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:30:08 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:30:08 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:30:08 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:30:08 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:30:08 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:30:08 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:30:08 NY | *** EXCLUSIVE-ACCOUNT CONFLICT: 1 foreign, wrong-symbol, or malformed/unproved position(s) detected — ordinary rails do not auto-close them; target completion is account-wide; all new risk blocked
+2026-08-29 00:30:08 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:30:08 NY | *** r4 migration: live ticket 30956569 does not map into the committed r4 inventory — fail-closed
+2026-08-29 00:30:08 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:30:09 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
