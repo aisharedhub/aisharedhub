@@ -197,5 +197,55 @@ ok("_target_flat_watch" not in (st4 or {})
    "no spurious target completion on the fresh $200k account")
 ok(len(fake4.sent) == 0, "adoption sends nothing")
 
+# ---- deferral: a transient constructor failure at an EXPORTABLE hit ----
+# defers with NO marker, and --export-continuity reconstructs the handoff
+# under the FOLDER's binding recipe (the exporter's own CLI verb "export"
+# could never mint it)
+b5, fake5, market5, broker5, wd5 = sh.boot(P1_IMM)
+quiet(sh.drive_to_authorized, b5, market5)
+sh.set_clock(b5, utc(2026, 8, 31, 22, 5, 40))
+quiet(sh.run_polls, b5, market5, 16)
+quiet(sh.run_sessions, b5, market5, 21)
+b5._continuity_new_export_txn = lambda *a, **kw: None    # transient failure
+gross5 = sum(abs(p.volume) * (100.0 if "XAU" in p.symbol else 1.0)
+             * p.price_open for p in fake5.positions) / max(
+                 fake5.account.equity, 1.0)
+need5 = (220000.0 - fake5.account.equity) / fake5.account.equity + 0.03
+for sym in market5.closes:
+    market5.closes[sym][-1] *= (1.0 + need5 / max(gross5, 0.2))
+forming5 = market5.next_session_after(market5.sessions[-1])
+sh.set_clock(b5, datetime(forming5.year, forming5.month, forming5.day, 10, 0,
+                          tzinfo=sh.NY).astimezone(timezone.utc))
+sh.refresh_ticks(b5, market5)
+quiet(sh.run_polls, b5, market5, 200, refresh=False)
+disk5 = json.load(open(os.path.join(wd5, "bot_state_v12.json")))
+ok("_target_hit" in disk5 and "_continuity_export_txn" not in disk5
+   and "_post_hit_catchup" not in disk5,
+   "a transient constructor failure on an EXPORTABLE completion defers "
+   "cleanly (no marker, no poisoning)")
+b6, fake6, market6, broker6, _ = sh.boot(["--export-continuity"],
+                                         workdir=wd5)
+b6._TEST_TARGET_HIT_EXPORT_MAX_POLLS = 80
+b6._TEST_TARGET_HIT_EXPORT_POLL_HOOK = lambda poll, stx: time.sleep(0.05)
+fake6.account.balance = fake5.account.balance
+fake6.deals = list(fake5.deals)
+fake6.history_orders = list(fake5.history_orders)
+market6.sessions = list(market5.sessions)
+market6.closes = {sym: list(vals) for sym, vals in market5.closes.items()}
+market6.rebuild()
+market6.grow()
+last6 = market6.sessions[-1]
+sh.set_clock(b6, datetime(last6.year, last6.month, last6.day, 17, 20,
+                          tzinfo=sh.NY).astimezone(timezone.utc))
+code6 = quiet(sh.run_polls, b6, market6, 80)
+ok(code6 == 0 and os.path.exists(b6.CONTINUITY_FILE),
+   f"the export command RECONSTRUCTS the deferred handoff and writes "
+   f"the artifact (exit {code6})")
+tx6 = (b6.load_state() or {}).get("_continuity_export_txn") or {}
+ok(tx6.get("producer_recipe") == "p1",
+   f"the reconstructed transaction carries the BINDING's producer recipe "
+   f"({tx6.get('producer_recipe')!r})")
+ok(len(fake6.sent) == 0, "the reconstruction sends nothing")
+
 print(f"test_continuity_chain: {PASS[0]} pass, {FAIL[0]} fail")
 sys.exit(1 if FAIL[0] else 0)

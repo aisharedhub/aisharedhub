@@ -5,14 +5,20 @@ BOT_BUILD `v3.8.9-fast-r4`, sha256 `083435ea…`), itself verified as V376
 (`v3.7.6`) plus the V389 hardening. Strategy math is bit-identical to
 the trusted V376 (`07516a8c…` archive) — proved by executed side-by-side
 equivalence, not by inspection alone. Final build: BOT_BUILD
-`v3.9.0-updated-v376`.
+`v3.9.2-updated-v376` (v3.9.0 and v3.9.1 were internal, never
+deployed).
 
 ## 1. V376-style startup (build order §1)
 
-* Bare single-terminal `mt5.initialize()` auto-discovery. No
-  `--mt5-path` flag, no BAT wrapper, no watchdog, no re-exec.
+* Bare single-terminal `mt5.initialize()` auto-discovery by default; an
+  OPTIONAL strictly validated `--mt5-path` pin (and the edit-once
+  `DEFAULT_MT5_PATH` source default used by folders 1/ and 2/). No BAT
+  wrapper, no watchdog. Startup performs ONE deliberate isolated
+  re-exec (`-E -P -B`); on Windows this is a second python process of
+  the same console.
 * V376-style typed confirmation `I ACCEPT LIVE` for live starts;
-  `--yes` documents unattended exact resume.
+  `--yes` skips the confirmation unconditionally (virgin starts
+  included) — reserve it for unattended exact resume.
 * New strict order-independent command parser: only the documented
   recipes parse; unknown, duplicate, contradictory or untested values
   are refused before any MT5 or state access; the interpreted recipe is
@@ -213,6 +219,46 @@ refused → fresh P2-gated adoption with the continuity identity sealed
 and rearm consumed once). test_r4_migration adds the pre-commit
 reproof attack (a 5th apparently-bot-owned ticket after
 INVENTORY_PROVED refuses the commit; removal commits cleanly).
+
+## 14. v3.9.2 — adversarial re-review of the v3.9.1 repairs
+
+A 51-agent adversarial review of the v3.9.1 diff (every finding
+attacked by two independent refuters) confirmed that two of the
+repairs were themselves incomplete, plus latent gaps; all fixed:
+
+* **Window provenance is now UNCONDITIONAL.** v3.9.1 consulted
+  `_window_live_proven` only while the process-local repaired-from-seed
+  latch was set — but only the virgin bootstrap process ever sets the
+  latch, so a restarted process (including the documented separate
+  `--export-continuity` run) skipped provenance entirely and could have
+  exported a window still containing seed rows as live history. All
+  three export sites now refuse whenever the 20-window is not fully
+  dated live-account provenance, latch or no latch.
+* **Completion deferral is provably reconstructible.** `aligned_clean`
+  now additionally requires the export baseline to be constructible at
+  the hit (which includes full live provenance); an early hit whose
+  window still contains seed rows receives the permanent audit marker
+  loudly instead of deferring to an export that must refuse.
+* **The exporter can actually reconstruct a deferred handoff.** The
+  continuity transaction's producer recipe now derives from the
+  FOLDER's lifecycle binding, never the running process's CLI verb —
+  the export process runs as recipe "export" and could previously never
+  mint the transaction the deferral promised.
+* **The legacy V380 watch validator is now fail-closed and
+  image-self-consistent**: the identity comparison is unconditional
+  (like the export-transaction validator), and every load-time call
+  site threads the owning image through instead of None.
+* **The r4 inventory proof is identity/cash-bound and
+  duplicate-safe**: the read is sandwiched between two verified
+  account witnesses (same login/server/balance or the proof refuses;
+  a wrong account halts), and duplicate ticket/identifier rows refuse
+  the proof (split-volume growth can no longer slip the per-row cap).
+* Digest-format note: v3.9.2's through-history digests differ from
+  v3.9.0/v3.9.1 byte layouts. No upgrade path is required — those
+  builds were never deployed (the only live predecessor is the V389 r4
+  build, whose supplied state carries no step records; verified), and
+  a hypothetical old-format step record fails closed as a WAIT, never
+  silently passes.
 
 ## Retained unchanged
 

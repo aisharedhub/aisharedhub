@@ -232,6 +232,29 @@ ok(out8c == "committed"
    and st8b["_r4_migration"]["stage"] == "COMMITTED",
    "the commit completes once the live book maps purely again")
 
+# duplicate rows sharing one committed identifier (split-volume growth)
+# refuse the proof: two half-volume rows may not impersonate one position
+b8d, fake8d, st8d, _ = r4harness.boot()
+for _ in range(3):
+    b8d._advance_r4_migration(st8d)
+assert st8d["_r4_migration"]["stage"] == "LEDGER_REBUILT"
+base_p = fake8d.positions[0]
+base_p.volume = base_p.volume / 2.0
+twin = fakemt5._Obj(
+    ticket=888888, identifier=base_p.identifier, magic=base_p.magic,
+    symbol=base_p.symbol, volume=base_p.volume, type=base_p.type,
+    time=base_p.time)
+fake8d.positions.append(twin)
+out8d = b8d._advance_r4_migration(st8d)
+ok(out8d == "wait"
+   and st8d["_r4_migration"]["stage"] == "LEDGER_REBUILT",
+   f"duplicate-identifier split rows refuse the commit ({out8d})")
+fake8d.positions.remove(twin)
+b8d._ACCOUNT_CONFLICT[0] = False
+out8e = b8d._advance_r4_migration(st8d)
+ok(out8e == "committed",
+   "the split-row refusal clears once the book is unambiguous again")
+
 # a MID-TAKEOVER source is held fail-closed, never migrated.  (The real
 # supplied state is COMMITTED/COMMITTED/PROVED with the ledger bridge
 # present; this SYNTHESIZED variant flips only those markers to prove

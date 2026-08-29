@@ -85,6 +85,10 @@ disk = json.load(open(os.path.join(wd, "bot_state_v12.json")))
 bak = json.load(open(os.path.join(wd, "bot_state_v12.json.bak")))
 ok("_target_hit" in disk and "_target_hit" in bak,
    "TARGET HIT committed to BOTH recovery images")
+_phc = disk.get("_post_hit_catchup") or {}
+ok(_phc.get("stage") == "AUDIT_REQUIRED",
+   f"an early hit (window not yet 20 live sessions) is LOUDLY classified "
+   f"audit-required, never silently deferred ({_phc.get('stage')})")
 ok(code == 0 or code is None,
    f"completion path exits cleanly or holds its final watch ({code})")
 

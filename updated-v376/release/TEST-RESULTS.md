@@ -10,7 +10,7 @@ scripts). The supplied live state files were used strictly read-only.
 
 Every suite below ran green, in one sequential battery, against the
 exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
-`5138e0fea71bf11ed49ba2ad3afbc8ac34510384f4f497fb760d60c3d8b350d1`).
+`2c3097d83b49184c75498b4be0110f895b945c327d8074e2a0571c8adef914cc`).
 
 | Suite | Result |
 | --- | --- |
@@ -18,7 +18,7 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 | test_binding_schema | 23 pass, 0 fail |
 | test_controller_ledger | 40 pass, 0 fail |
 | test_applied_exposure | 20 pass, 0 fail |
-| test_r4_migration | 75 pass, 0 fail |
+| test_r4_migration | 77 pass, 0 fail |
 | test_operator_commands | 70 pass, 0 fail |
 | test_console_status | 19 pass, 0 fail |
 | test_gate_history | 45 pass, 0 fail |
@@ -27,10 +27,10 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 | test_protections | 31 pass, 0 fail |
 | test_fresh_lifecycle | 36 pass, 0 fail |
 | test_orb_matrix | 18 pass, 0 fail |
-| test_target_completion | 14 pass, 0 fail |
+| test_target_completion | 15 pass, 0 fail |
 | test_interrupt | 8 pass, 0 fail |
-| test_continuity_chain | 23 pass, 0 fail |
-| **Total** | **801 checks, 0 failures** |
+| test_continuity_chain | 27 pass, 0 fail |
+| **Total** | **808 checks, 0 failures** |
 | run_mutations | **15/15 mutants KILLED, 0 survived** |
 
 ## Suites (maintainer/tests/)

@@ -869,7 +869,7 @@ RESUME_PAUSED_CMD = RELEASE_RECIPE_ID == "resume"
 FLATTEN_AND_STOP = RELEASE_RECIPE_ID == "flatten-stop"
 ASSUME_YES = bool((_DIRECT_PROFILE or {}).get("assume_yes"))
 V376_P1_PATH_PINNED = False
-BOT_BUILD = "v3.9.1-updated-v376"
+BOT_BUILD = "v3.9.2-updated-v376"
 
 if MODE not in MODES:
     print(f"--mode must be one of {list(MODES)}"); sys.exit(1)
@@ -1476,7 +1476,7 @@ def _state_recovery_semantically_valid(obj):
     watch = checked.get("_target_flat_watch")
     if (isinstance(watch, dict)
             and watch.get("schema") == _LEGACY_TARGET_WATCH_SCHEMA
-            and _valid_legacy_target_watch_impl(watch, None)):
+            and _valid_legacy_target_watch_impl(watch, checked)):
         upgraded_watch = _legacy_target_watch_upgrade_record(obj, watch)
         if upgraded_watch is not None:
             checked = dict(obj)
@@ -1608,7 +1608,7 @@ def _state_tmp_recoverable(obj):
     current_watch = checked.get("_target_flat_watch")
     if (isinstance(current_watch, dict)
             and current_watch.get("schema") == _LEGACY_TARGET_WATCH_SCHEMA
-            and _valid_legacy_target_watch_impl(current_watch, None)):
+            and _valid_legacy_target_watch_impl(current_watch, checked)):
         # A crash-left V380 image can contain the sole durable target watch
         # beside raw ledger preimages that V381 intentionally quarantines.
         # Convert only this detached validation image so that the newer temp
@@ -17311,8 +17311,9 @@ def _continuity_payload(st, _skip_txn_check=False):
         raise ValueError("continuity producer daycount session invalid") from exc
     if not _finite_num(dc.get("last_eq"), positive=True):
         raise ValueError("continuity producer daycount equity invalid")
-    if _VOL_HISTORY_REPAIRED_FROM_SEED[0] and not _window_live_proven(st):
-        raise ValueError("book-return history was repaired from seed this boot")
+    if not _window_live_proven(st):
+        raise ValueError("window provenance is not 20 dated live-account "
+                         "observations (seed/backfill material remains)")
     sh = copy.deepcopy(st.get("shadow"))
     if not isinstance(sh, dict) or not sh.get("backfilled"):
         raise ValueError("shadow ledger is not complete/backfilled")
@@ -17673,8 +17674,7 @@ def _continuity_economic_state_hash(st):
 def _continuity_export_baseline(st, origin_session):
     """Freeze every economic input needed to prove one terminal fold."""
     if (not isinstance(st, dict) or not _continuity_history_frontier_ok(st)
-            or (_VOL_HISTORY_REPAIRED_FROM_SEED[0]
-                and not _window_live_proven(st))):
+            or not _window_live_proven(st)):
         return None
     dc = st.get("_daycount"); sh = st.get("shadow")
     if (not isinstance(dc, dict) or set(dc) != {"session", "last_eq"}
@@ -17752,8 +17752,14 @@ def _continuity_new_export_txn(st, ai, origin_reason):
         baseline = _continuity_export_baseline(st, origin)
         if witness is None or baseline is None:
             return None
+        # The producer recipe is the FOLDER's bound recipe, never this
+        # process's CLI verb: --export-continuity runs as recipe "export"
+        # yet must reconstruct a deferred handoff for the bound producer.
+        # The startup gates already refuse any live command whose typed
+        # profile differs from the binding, so the binding is authoritative.
+        producer_recipe = (st.get("_lifecycle_binding") or {}).get("recipe")
         if (origin_reason != "TARGET_PASS"
-                or RELEASE_RECIPE_ID not in {
+                or producer_recipe not in {
                     "p1", "p2-fresh", "p2-adopt",
                     "p2-standalone-immediate"}):
             return None
@@ -17772,7 +17778,7 @@ def _continuity_new_export_txn(st, ai, origin_reason):
             "schema": _CONTINUITY_EXPORT_TXN_SCHEMA,
             "stage": "PREPARED",
             "origin_reason": origin_reason,
-            "producer_recipe": RELEASE_RECIPE_ID,
+            "producer_recipe": producer_recipe,
             "origin_session": origin,
             "daycount_cursor": origin,
             "shadow_cursor": origin,
@@ -18568,8 +18574,7 @@ def _export_continuity(st, path=None):
         log("*** continuity export refused: account-wide flat/cash sandwich "
             "could not be proved")
         return False
-    if ((_VOL_HISTORY_REPAIRED_FROM_SEED[0]
-         and not _window_live_proven(st))
+    if (not _window_live_proven(st)
             or not _continuity_history_frontier_ok(st)):
         log("*** continuity export refused: exact live 20-session return/dip "
             "history is unavailable or was repaired from seed this boot")
@@ -20556,7 +20561,7 @@ def _valid_current_target_watch_impl(watch, st=None):
     if legacy_watch is None:
         if legacy_sha is not None:
             return False
-    elif (not _valid_legacy_target_watch_impl(legacy_watch, None)
+    elif (not _valid_legacy_target_watch_impl(legacy_watch, st)
             or not _lower_hex64(legacy_sha)
             or _continuity_hash(legacy_watch) != legacy_sha):
         return False
@@ -20748,7 +20753,7 @@ def _valid_post_hit_catchup_impl(record, st=None):
         if legacy_sha is not None or record["mode"] == "V380_CATCHUP":
             return False
     else:
-        if (not _valid_legacy_target_watch_impl(legacy_watch, None)
+        if (not _valid_legacy_target_watch_impl(legacy_watch, st)
                 or not _lower_hex64(legacy_sha)
                 or _continuity_hash(legacy_watch) != legacy_sha
                 or record["mode"] not in {"V380_CATCHUP",
@@ -21017,10 +21022,10 @@ def _valid_legacy_target_watch_impl(watch, st=None):
             or isinstance(account.get("login"), bool)
             or not isinstance(account.get("login"), int)
             or account["login"] <= 0
-            or (exp_login is not None and account["login"] != exp_login)
+            or account["login"] != exp_login
             or not isinstance(account.get("server"), str)
             or not account["server"]
-            or (exp_server is not None and account["server"] != exp_server)
+            or account["server"] != exp_server
             or account.get("currency") != "USD"
             or isinstance(account.get("balance_cents"), bool)
             or not isinstance(account.get("balance_cents"), int)
@@ -32951,7 +32956,7 @@ def _new_post_hit_catchup(st, ai, legacy_watch=None,
 
         legacy_copy = None; legacy_sha = None; legacy_catchup = None
         if legacy_watch is not None:
-            if not _valid_legacy_target_watch_impl(legacy_watch, None):
+            if not _valid_legacy_target_watch_impl(legacy_watch, st):
                 force_audit_reason = (force_audit_reason
                                       or "legacy target watch is malformed")
             else:
@@ -33264,7 +33269,7 @@ def _legacy_target_watch_upgrade_record(st, watch):
     if (not isinstance(st, dict)
             or not _valid_terminal_custody_lifecycle_binding(
                 st.get("_lifecycle_binding"))
-            or not _valid_legacy_target_watch_impl(watch, None)):
+            or not _valid_legacy_target_watch_impl(watch, st)):
         return None
     binding = st.get("_lifecycle_binding")
     line_cents = _target_line_cents(binding)
@@ -34223,10 +34228,14 @@ def _service_target_flat_watch(st, start_bal):
             if post is None:
                 # An aligned, pending-free completion needs NO catch-up: the
                 # export command reconstructs its handoff under full proofs
-                # (_bootstrap_missing_post_hit_handoff).  Only a genuinely
-                # unclassifiable shape receives the permanent audit marker —
-                # a transient constructor failure must never poison a clean
-                # completion forever.
+                # (_bootstrap_missing_post_hit_handoff).  Deferral is legal
+                # ONLY when that reconstruction is provably possible right
+                # now — the export baseline itself must be constructible
+                # (which requires the 20-window fully live-proven).  Any
+                # other shape receives the permanent audit marker: a
+                # completion that can never export must say so loudly, and
+                # only a transient constructor failure on an exportable
+                # shape is deferred.
                 aligned_clean = bool(
                     isinstance(dc, dict) and isinstance(sh, dict)
                     and dc.get("session") == sh.get("session")
@@ -34234,7 +34243,9 @@ def _service_target_flat_watch(st, start_bal):
                     and sh.get("backfilled") is True
                     and "_ledger_bootstrap" not in st
                     and "_ledger_recovery_halt" not in st
-                    and legacy_watch is None)
+                    and legacy_watch is None
+                    and _continuity_export_baseline(
+                        st, dc.get("session")) is not None)
                 if aligned_clean:
                     log("*** TARGET HIT: aligned completion — continuity "
                         "preparation deferred to --export-continuity "
@@ -35442,6 +35453,12 @@ def _r4_live_inventory_proof(st):
     committed = {row.get("identifier"): row
                  for row in takeover.get("positions", [])
                  if isinstance(row, dict)}
+    # Identity/cash sandwich: the proof binds to the exact account both
+    # before and after the inventory read (a wrong login/server halts
+    # inside _verified_account_info; a mid-read balance change refuses).
+    ai_before = _verified_account_info("r4 inventory proof (pre)")
+    if ai_before is None:
+        return None
     orders = _refresh_pending_orders_health()
     if orders is None:
         return None
@@ -35454,10 +35471,20 @@ def _r4_live_inventory_proof(st):
     if rows is None or _ACCOUNT_CONFLICT[0]:
         return None
     image = []
+    seen_identifiers = set()
+    seen_tickets = set()
     for p in rows:
         parsed = _broker_position_identity_row(p)
         if parsed is None:
             return None
+        if (parsed["identifier"] in seen_identifiers
+                or parsed["ticket"] in seen_tickets):
+            log("*** r4 migration: duplicate ticket/identifier rows in "
+                "the live inventory — proof refused (split-volume "
+                "ambiguity)")
+            return None
+        seen_identifiers.add(parsed["identifier"])
+        seen_tickets.add(parsed["ticket"])
         source = committed.get(parsed["identifier"])
         side = "buy" if parsed["type"] == mt5.POSITION_TYPE_BUY else "sell"
         if (source is None
@@ -35476,6 +35503,17 @@ def _r4_live_inventory_proof(st):
             "side": side, "volume": float(parsed["volume"]),
         })
     image.sort(key=lambda row: row["ticket"])
+    ai_after = _verified_account_info("r4 inventory proof (post)")
+    if (ai_after is None
+            or getattr(ai_before, "login", None)
+                != getattr(ai_after, "login", "x")
+            or getattr(ai_before, "server", None)
+                != getattr(ai_after, "server", "x")
+            or getattr(ai_before, "balance", None)
+                != getattr(ai_after, "balance", "x")):
+        log("*** r4 migration: account identity/cash witness changed "
+            "during the inventory read — proof refused")
+        return None
     return _state_body_digest({"schema": "r4_live_inventory/1",
                                "positions": image})
 
