@@ -189,6 +189,24 @@ safety-critical path at release time carries more risk than the dead
 code does. They are documented here so no reader mistakes them for
 the protection itself.
 
+## Round 5 — tracing the live startup (→ v3.9.4)
+
+Walking the operator through exactly what the live command does, step by
+step, exposed three defects in round 4's own cash/deal-history reproof.
+None risks money — all three are false REFUSALS — but each would have
+stalled the one-time migration permanently, leaving the account under
+custody rails with new risk blocked and no path forward:
+
+| Defect | Why it would stall the handoff | Repair |
+| --- | --- | --- |
+| The reproof queried `history_deals_get` with raw UTC bounds | Every other history query in this build encodes bounds into the BROKER server epoch via `_mt5_query_datetime`; on a broker offset from UTC (OANDA) the window misses the real rows and can sweep hours of prior owned deals into the arithmetic | Both bounds now go through `_mt5_query_datetime`; unavailable conversion refuses that poll only |
+| The window opened 60 s BEFORE the PREPARED balance capture | Owned deals settled in that span were already inside `start_balance_cents` and were added again — a permanent mismatch | The window starts at the capture itself |
+| Every non-owned row refused the commit | Broker swap/interest/commission rows carry magic 0 and position 0; OANDA posts them at rollover, exactly when a handoff happens, and the window's growing end meant the refusal never cleared | Non-owned rows are classified with the build's own `_external_cashflow_type_policy`: foreign BUY/SELL and external cash (balance/credit/charge/correction/bonus) refuse; fee/interest/dividend/tax rows have their cash counted and never block |
+
+Proved by suite (85 → 87): a broker swap row commits with its cash
+counted; a deposit refuses even when the balance agrees with it; the
+$1,000 balance change and manual-deal refusals are unchanged.
+
 Coverage note: 22 of the hunt's 33 agents terminated on a usage limit,
 so a subset of candidates (including all migration-path candidates)
 received no automated refutation. Those were verified by hand against

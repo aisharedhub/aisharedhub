@@ -1,4 +1,4 @@
-# Updated V376 — MT5 Vol-Targeted Bot v12 (final build v3.9.1-updated-v376)
+# Updated V376 — MT5 Vol-Targeted Bot v12 (final build v3.9.4-updated-v376)
 
 The frozen V376 five-sleeve strategy (ORB 40% / S8V 10% / BTC 20% /
 XAU-mom 10% / XAU-beta 5%, ONF permanently disabled) with V376-style

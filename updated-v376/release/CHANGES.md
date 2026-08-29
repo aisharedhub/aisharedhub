@@ -5,7 +5,7 @@ BOT_BUILD `v3.8.9-fast-r4`, sha256 `083435ea…`), itself verified as V376
 (`v3.7.6`) plus the V389 hardening. Strategy math is bit-identical to
 the trusted V376 (`07516a8c…` archive) — proved by executed side-by-side
 equivalence, not by inspection alone. Final build: BOT_BUILD
-`v3.9.2-updated-v376` (v3.9.0 and v3.9.1 were internal, never
+`v3.9.4-updated-v376` (v3.9.0 through v3.9.3 were internal, never
 deployed).
 
 ## 1. V376-style startup (build order §1)
@@ -293,6 +293,39 @@ verified real and repaired:
   fast pass PREPARES at completion, exports, and is adopted by a fresh
   P2-gated folder (suite-proved end-to-end). A hit before ANY
   completed live session still audit-locks loudly.
+
+## 16. v3.9.4 — the commit cash reproof made sound
+
+Tracing the exact live startup for the operator exposed three defects in
+the v3.9.3 cash/deal-history reproof. Each causes a FALSE refusal —
+fail-closed, no money risk — but each would stall the one-time migration
+permanently, leaving the account under custody rails with new risk
+blocked and no way forward:
+
+* **Wrong time base.** The reproof queried `history_deals_get` with raw
+  UTC bounds while every other history query in this build encodes its
+  bounds into the BROKER server epoch via `_mt5_query_datetime`. On a
+  broker whose server time is offset from UTC (OANDA is), the window
+  does not align with the deal timestamps at all and can sweep hours of
+  prior owned deals into the arithmetic — refusing forever.
+* **Double-counted pre-baseline deals.** The window opened 60 seconds
+  BEFORE the PREPARED balance capture, so an owned deal settled in that
+  span sat inside `start_balance_cents` AND was added again to the
+  expected total.
+* **Broker fee rows blocked the commit.** Every non-owned row refused,
+  but swap/interest/commission rows carry magic 0 and position 0. OANDA
+  posts them at rollover — exactly when an operator may hand off — and
+  because the window's end grows with the clock, the refusal never
+  cleared.
+
+The reproof now encodes both bounds through `_mt5_query_datetime`,
+starts at the PREPARED capture itself, and classifies non-owned rows
+with the build's own `_external_cashflow_type_policy`: foreign BUY/SELL
+trades and external cash (balance, credit, charge, correction, bonus)
+refuse the commit; broker fee/interest/dividend/tax rows have their cash
+counted and never block. Suite 85 → 87: a broker swap row commits
+(counted), a deposit still refuses even when the balance agrees with it,
+and the $1,000 balance change and manual-deal refusals are unchanged.
 
 ## Retained unchanged
 
