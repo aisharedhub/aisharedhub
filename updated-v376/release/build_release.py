@@ -13,6 +13,7 @@ Assembles UpdatedV376.zip:
                              single-line diff
     CHANGES.md               change report
     TEST-RESULTS.md          test summary
+    AUDIT-REPORT.md          handoff verification audit
     MANIFEST.sha256          SHA-256 of every member
     maintainer/tests/        the full offline campaign (kept out of the
                              live folder)
@@ -43,6 +44,7 @@ MEMBERS = [
     ("DEFAULT/README.md", os.path.join(HERE, "README.md")),
     ("CHANGES.md", os.path.join(HERE, "CHANGES.md")),
     ("TEST-RESULTS.md", os.path.join(HERE, "TEST-RESULTS.md")),
+    ("AUDIT-REPORT.md", os.path.join(HERE, "AUDIT-REPORT.md")),
 ]
 
 # Pinned-terminal variant folders (DEFAULT stays the primary build).
