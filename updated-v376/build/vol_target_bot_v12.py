@@ -130,158 +130,330 @@ def _direct_amount_cents(token):
     return cents if 0 < cents <= 100_000_000_000_000 else None
 
 
-_DIRECT_P1_CORE = (
-    "--mode", "grind", "--phase", "1",
-    "--start-min-dd", "0.02", "--start-bounce", "0.005",
-    "--post-loss-mult", "0.75", "--live",
-)
-_DIRECT_P2_GATED_CORE = (
-    "--mode", "grind", "--phase", "2",
-    "--start-min-dd", "0.01", "--start-bounce", "0.005",
-    "--start-cap", "10", "--rearm-gate",
-    "--post-loss-mult", "0.75", "--live",
-)
-_DIRECT_P2_IMMEDIATE_PREFIX = (
-    "--entry-policy", "immediate", "--mode", "grind", "--phase", "2",
-)
-_DIRECT_P1_GATED = ("--entry-policy", "gated") + _DIRECT_P1_CORE
-_DIRECT_P1_IMMEDIATE = ("--entry-policy", "immediate") + _DIRECT_P1_CORE
-_DIRECT_P2_GATED = ("--entry-policy", "gated") + _DIRECT_P2_GATED_CORE
-_DIRECT_P2_IMMEDIATE = _DIRECT_P2_IMMEDIATE_PREFIX + (
-    "--capital", "<amount>", "--live",
-)
 # Exact predecessor-only authority. V381/V382/V383 standalone-immediate P2
-# bound only an untouched $200,000 account. V384 accepts the current positive,
-# cent-exact flat USD balance and V385 preserves this value solely to validate and
-# migrate those older durable lifecycle images without weakening them.
+# bound only an untouched $200,000 account. Preserved solely to validate the
+# one-time r4 migration source images without weakening them.
 _V383_P2_STANDALONE_EXPECTED_CENTS = 20_000_000
-_DIRECT_FUNDED = (
-    "--entry-policy", "gated",
-    "--funded", "--tv", "1.0", "--brk", "3.0",
-    "--start-min-dd", "0.03", "--start-bounce", "0",
-    "--post-loss-mult", "0.75", "--live",
+
+# ---------------------------------------------------------------------------
+# STRICT ORDER-INDEPENDENT COMMAND GRAMMAR (Updated V376).
+#
+# The operator types ordinary flags in any order.  The parser:
+#   * rejects unknown flags, duplicated flags, and stray tokens;
+#   * rejects a value flag with a missing or flag-shaped value;
+#   * rejects malformed or non-finite amounts before any float conversion;
+#   * rejects contradictory combinations (e.g. immediate policy plus gate
+#     tokens, --funded plus --capital);
+#   * then resolves the ECONOMIC VALUES against the finite table of
+#     individually tested recipes below.  A parseable command whose values do
+#     not match a tested recipe is refused — parser acceptance is never
+#     qualification.
+# The resolved recipe (never raw argv) is what binds to lifecycle state.
+# ---------------------------------------------------------------------------
+_CLI_VALUE_FLAGS = (
+    "--entry-policy", "--mode", "--phase", "--start-min-dd", "--start-bounce",
+    "--start-cap", "--post-loss-mult", "--capital",
+    "--expected-start-balance", "--tv", "--brk", "--mt5-path",
 )
-_DIRECT_EXPORT = ("--export-continuity",)
-_DIRECT_RECOVER = ("--recover-safety", "--live")
+_CLI_BOOL_FLAGS = (
+    "--live", "--rearm-gate", "--funded", "--yes",
+    "--selfcheck", "--list-symbols", "--diagnose",
+    "--pause-new-risk", "--resume-paused", "--flatten-and-stop",
+    "--export-continuity", "--recover-safety",
+)
+# Canonical decimal values for the tested recipes (compared as exact
+# decimals, so "0.020" equals "0.02" but "0.021" is refused).
+_RECIPE_GATE_VALUES = {
+    "p1-gated": {"--start-min-dd": "0.02", "--start-bounce": "0.005",
+                 "--post-loss-mult": "0.75"},
+    "p2-gated": {"--start-min-dd": "0.01", "--start-bounce": "0.005",
+                 "--start-cap": "10", "--post-loss-mult": "0.75"},
+    "funded": {"--tv": "1.0", "--brk": "3.0", "--start-min-dd": "0.03",
+               "--start-bounce": "0", "--post-loss-mult": "0.75"},
+}
+_DIRECT_REFUSAL = [None]
+
+
+def _cli_decimal_token_value(token):
+    """Strict plain-decimal parse for rate/threshold values.
+
+    ASCII digits with at most one dot, no sign/exponent/NaN/Inf spellings, no
+    empty integer or all-empty fraction part, no leading zeros beyond "0.".
+    Returns a normalized decimal string (via int scaling) or None.
+    """
+    if (not isinstance(token, str) or not token or not token.isascii()
+            or len(token) > 20):
+        return None
+    pieces = token.split(".")
+    if len(pieces) > 2 or not pieces[0].isdigit():
+        return None
+    if len(pieces[0]) > 1 and pieces[0].startswith("0"):
+        return None
+    frac = pieces[1] if len(pieces) == 2 else ""
+    if len(pieces) == 2 and (not frac or not frac.isdigit() or len(frac) > 9):
+        return None
+    scaled = int(pieces[0] + frac)
+    return f"{scaled}e-{len(frac)}"
+
+
+def _cli_decimal_equal(token, canonical):
+    a = _cli_decimal_token_value(token)
+    b = _cli_decimal_token_value(canonical)
+    if a is None or b is None:
+        return False
+    am, ae = a.split("e-")
+    bm, be = b.split("e-")
+    shift = int(ae) - int(be)
+    if shift >= 0:
+        return int(am) == int(bm) * (10 ** shift)
+    return int(am) * (10 ** (-shift)) == int(bm)
+
+
+def _cli_refuse(reason):
+    _DIRECT_REFUSAL[0] = str(reason)
+    return None
+
+
+def _cli_split_flags(argv):
+    """Order-independent split of argv into {flag: value} + {bool flags}."""
+    values = {}
+    bools = set()
+    index = 0
+    argv = list(argv)
+    while index < len(argv):
+        token = argv[index]
+        if token in _CLI_BOOL_FLAGS:
+            if token in bools:
+                return None, None, f"duplicate flag {token}"
+            bools.add(token)
+            index += 1
+            continue
+        if token in _CLI_VALUE_FLAGS:
+            if token in values:
+                return None, None, f"duplicate flag {token}"
+            if index + 1 >= len(argv):
+                return None, None, f"{token} requires a value"
+            value = argv[index + 1]
+            if not isinstance(value, str) or not value \
+                    or value.startswith("--"):
+                return None, None, f"{token} requires a value"
+            values[token] = value
+            index += 2
+            continue
+        return None, None, f"unknown token {token!r}"
+    return values, bools, None
 
 
 def _direct_match_recipe(argv):
-    """Return the exact public direct recipe, or ``None``.
+    """Resolve argv to one tested recipe profile, or ``None`` (refused).
 
-    Entry policy is mandatory and positionally sealed for every risk-taking
-    recipe. Variable fields live in one ordered suffix: expected balance
-    (gated P2-ADOPT/FUNDED only), capital (only P1/P2), then optional MT5 path.
-    Immediate P2 is standalone and, like P1, binds the current positive,
-    cent-exact flat USD balance; it accepts no continuity or operator-supplied
-    expected-balance override. This keeps typos, policy ambiguity, reordering,
-    duplicates, private pins and invented combinations out before MetaTrader5
-    is imported or state is inspected.
+    Order-independent; the refusal reason is stored in ``_DIRECT_REFUSAL``.
+    Runs before MetaTrader5 is imported or state is inspected.
     """
-    argv = tuple(argv)
-    recipe = None
-    rest = ()
-    expected_cents = None
-    expected_raw = None
+    _DIRECT_REFUSAL[0] = None
+    values, bools, error = _cli_split_flags(argv)
+    if error is not None:
+        return _cli_refuse(error)
+    live = "--live" in bools
+    assume_yes = "--yes" in bools
+    mt5_path = values.get("--mt5-path")
+    if mt5_path is not None and (not mt5_path or mt5_path.startswith("--")):
+        return _cli_refuse("--mt5-path requires a real path value")
+
+    def _no_other(allowed_values=(), allowed_bools=(), what="this command"):
+        extra_v = sorted(set(values) - set(allowed_values) - {"--mt5-path"})
+        extra_b = sorted(set(bools) - set(allowed_bools))
+        if extra_v or extra_b:
+            return f"{what} does not accept {' '.join(extra_v + extra_b)}"
+        return None
+
+    def _profile(recipe, entry_policy=None, expected=None, capital=None):
+        return {
+            "recipe": recipe,
+            "entry_policy": entry_policy,
+            "expected_cents": expected,
+            "expected_raw": values.get("--expected-start-balance"),
+            "capital_cents": capital,
+            "capital_raw": values.get("--capital"),
+            "mt5_path": mt5_path,
+            "assume_yes": assume_yes,
+        }
+
+    # ---- read-only / operational maintenance commands (exclusive verbs) ----
+    maintenance = [flag for flag in (
+        "--selfcheck", "--list-symbols", "--diagnose", "--export-continuity",
+        "--recover-safety", "--pause-new-risk", "--resume-paused",
+        "--flatten-and-stop") if flag in bools]
+    if len(maintenance) > 1:
+        return _cli_refuse(
+            f"contradictory commands {' '.join(maintenance)}")
+    if maintenance:
+        verb = maintenance[0]
+        needs_live = verb in ("--recover-safety", "--flatten-and-stop")
+        if needs_live and not live:
+            return _cli_refuse(f"{verb} requires --live")
+        if not needs_live and live:
+            return _cli_refuse(f"{verb} is read-only/stateful and refuses "
+                               "--live")
+        allowed_bools = {verb} | ({"--live", "--yes"} if needs_live else set())
+        bad = _no_other((), allowed_bools, verb)
+        if bad is not None:
+            return _cli_refuse(bad)
+        recipe = {
+            "--selfcheck": "selfcheck", "--list-symbols": "list-symbols",
+            "--diagnose": "diagnose", "--export-continuity": "export",
+            "--recover-safety": "recover", "--pause-new-risk": "pause",
+            "--resume-paused": "resume", "--flatten-and-stop": "flatten-stop",
+        }[verb]
+        return _profile(recipe)
+
+    # ---- live strategy recipes ----
+    if not live:
+        return _cli_refuse("no command: strategy recipes require --live; "
+                           "maintenance verbs are --selfcheck, "
+                           "--list-symbols, --diagnose, --pause-new-risk, "
+                           "--resume-paused, --flatten-and-stop --live, "
+                           "--export-continuity, --recover-safety --live")
+    policy_token = values.get("--entry-policy")
+    if policy_token is not None and policy_token not in ("gated", "immediate"):
+        return _cli_refuse("--entry-policy must be gated or immediate")
+
     capital_cents = None
-    capital_raw = None
-    mt5_path = None
-    allow_expected = False
-    require_expected = False
-    allow_capital = False
-    entry_policy = None
-    if argv[:len(_DIRECT_P1_GATED)] == _DIRECT_P1_GATED:
-        recipe = "p1"
-        entry_policy = "gated-v1"
-        rest = argv[len(_DIRECT_P1_GATED):]
-        allow_capital = True
-    elif argv[:len(_DIRECT_P1_IMMEDIATE)] == _DIRECT_P1_IMMEDIATE:
-        recipe = "p1"
-        entry_policy = "immediate-v1"
-        rest = argv[len(_DIRECT_P1_IMMEDIATE):]
-        allow_capital = True
-    elif argv[:len(_DIRECT_P2_GATED)] == _DIRECT_P2_GATED:
-        recipe = "p2-fresh"
-        entry_policy = "gated-v1"
-        rest = argv[len(_DIRECT_P2_GATED):]
-        allow_expected = True
-        allow_capital = True
-    elif argv[:len(_DIRECT_P2_IMMEDIATE_PREFIX)] == \
-            _DIRECT_P2_IMMEDIATE_PREFIX:
-        recipe = "p2-standalone-immediate"
-        entry_policy = "immediate-v1"
-        rest = list(argv[len(_DIRECT_P2_IMMEDIATE_PREFIX):])
-        # V389's plain no-gate P2 profile deliberately places its required
-        # campaign base before --live.  No drawdown/bounce/cap/rearm or
-        # post-loss token is accepted in this recipe.
-        if (len(rest) < 3 or rest[0] != "--capital"
-                or rest[2] != "--live"):
-            return None
-        capital_raw = rest[1]
-        capital_cents = _direct_amount_cents(capital_raw)
+    if "--capital" in values:
+        capital_cents = _direct_amount_cents(values["--capital"])
         if capital_cents is None:
-            return None
-        rest = rest[3:]
-    elif argv[:len(_DIRECT_FUNDED)] == _DIRECT_FUNDED:
-        recipe = "funded"
-        entry_policy = "funded-gate-v1"
-        rest = argv[len(_DIRECT_FUNDED):]
-        allow_expected = True
-        require_expected = True
-    elif argv[:len(_DIRECT_EXPORT)] == _DIRECT_EXPORT:
-        recipe = "export"
-        rest = argv[len(_DIRECT_EXPORT):]
-    elif argv[:len(_DIRECT_RECOVER)] == _DIRECT_RECOVER:
-        recipe = "recover"
-        rest = argv[len(_DIRECT_RECOVER):]
-    else:
-        return None
-    rest = list(rest)
-    if allow_expected and rest[:1] == ["--expected-start-balance"]:
-        if len(rest) < 2:
-            return None
-        expected_raw = rest[1]
-        expected_cents = _direct_amount_cents(expected_raw)
+            return _cli_refuse("--capital must be a plain positive dollar "
+                               "amount (no sign/comma/exponent, <= 2 "
+                               "decimals)")
+    expected_cents = None
+    if "--expected-start-balance" in values:
+        expected_cents = _direct_amount_cents(
+            values["--expected-start-balance"])
         if expected_cents is None:
-            return None
-        rest = rest[2:]
-        if recipe == "p2-fresh":
-            recipe = "p2-adopt"
-    if require_expected and expected_cents is None:
-        return None
-    if allow_capital and rest[:1] == ["--capital"]:
-        if len(rest) < 2:
-            return None
-        capital_raw = rest[1]
-        capital_cents = _direct_amount_cents(capital_raw)
-        if capital_cents is None:
-            return None
-        rest = rest[2:]
-    if rest[:1] == ["--mt5-path"]:
-        if len(rest) != 2 or not rest[1] or rest[1].startswith("--"):
-            return None
-        mt5_path = rest[1]
-        rest = []
-    if rest:
-        return None
-    return {
-        "recipe": recipe,
-        "entry_policy": entry_policy,
-        "expected_cents": expected_cents,
-        "expected_raw": expected_raw,
-        "capital_cents": capital_cents,
-        "capital_raw": capital_raw,
-        "mt5_path": mt5_path,
-    }
+            return _cli_refuse("--expected-start-balance must be a plain "
+                               "positive dollar amount")
+
+    if "--funded" in bools:
+        if policy_token == "immediate":
+            return _cli_refuse("--funded is gated-only (funded-gate-v1)")
+        bad = _no_other(
+            ("--entry-policy", "--tv", "--brk", "--start-min-dd",
+             "--start-bounce", "--post-loss-mult",
+             "--expected-start-balance"),
+            ("--funded", "--live", "--yes"), "the FUNDED recipe")
+        if bad is not None:
+            return _cli_refuse(bad)
+        for flag, canonical in _RECIPE_GATE_VALUES["funded"].items():
+            if flag not in values:
+                return _cli_refuse(f"the FUNDED recipe requires {flag} "
+                                   f"{canonical}")
+            if not _cli_decimal_equal(values[flag], canonical):
+                return _cli_refuse(
+                    f"{flag} {values[flag]!r} is not the tested FUNDED value "
+                    f"{canonical}; only individually tested recipes run")
+        if expected_cents is None:
+            return _cli_refuse("the FUNDED recipe requires "
+                               "--expected-start-balance")
+        return _profile("funded", "funded-gate-v1", expected=expected_cents)
+
+    if values.get("--mode") != "grind":
+        return _cli_refuse("live recipes require --mode grind (the only "
+                           "tested live mode)")
+    phase_token = values.get("--phase")
+    if phase_token not in ("1", "2"):
+        return _cli_refuse("--phase must be 1 or 2")
+    phase = int(phase_token)
+
+    gate_flags = [flag for flag in (
+        "--start-min-dd", "--start-bounce", "--start-cap",
+        "--post-loss-mult") if flag in values]
+    if "--rearm-gate" in bools:
+        gate_flags.append("--rearm-gate")
+
+    if policy_token == "immediate":
+        if gate_flags:
+            return _cli_refuse("immediate entry accepts no gate tokens "
+                               f"(got {' '.join(sorted(gate_flags))}); "
+                               "immediate-v1 changes only the gate wait and "
+                               "uses post-loss multiplier 1.0")
+        if expected_cents is not None:
+            return _cli_refuse("immediate recipes bind the observed balance; "
+                               "--expected-start-balance is not accepted")
+        bad = _no_other(("--entry-policy", "--mode", "--phase", "--capital"),
+                        ("--live", "--yes"), "the immediate recipe")
+        if bad is not None:
+            return _cli_refuse(bad)
+        if phase == 2:
+            if capital_cents is None:
+                return _cli_refuse("immediate P2 requires --capital (the "
+                                   "declared campaign base)")
+            return _profile("p2-standalone-immediate", "immediate-v1",
+                            capital=capital_cents)
+        return _profile("p1", "immediate-v1", capital=capital_cents)
+
+    # gated (explicit --entry-policy gated, or no policy token: the exact
+    # preserved V376 commands carry no policy token and are gated)
+    if phase == 1:
+        table = _RECIPE_GATE_VALUES["p1-gated"]
+        if "--start-cap" in values or "--rearm-gate" in bools:
+            return _cli_refuse("--start-cap/--rearm-gate belong to the P2 "
+                               "gated recipe only")
+        if expected_cents is not None:
+            return _cli_refuse("P1 binds the observed balance; "
+                               "--expected-start-balance is not accepted")
+        bad = _no_other(("--entry-policy", "--mode", "--phase", "--capital")
+                        + tuple(table), ("--live", "--yes"),
+                        "the P1 gated recipe")
+        if bad is not None:
+            return _cli_refuse(bad)
+        for flag, canonical in table.items():
+            if flag not in values:
+                return _cli_refuse(f"the P1 gated recipe requires {flag} "
+                                   f"{canonical}")
+            if not _cli_decimal_equal(values[flag], canonical):
+                return _cli_refuse(
+                    f"{flag} {values[flag]!r} is not the tested P1 value "
+                    f"{canonical}; only individually tested recipes run")
+        return _profile("p1", "gated-v1", capital=capital_cents)
+
+    table = _RECIPE_GATE_VALUES["p2-gated"]
+    if "--rearm-gate" not in bools:
+        return _cli_refuse("the P2 gated recipe requires --rearm-gate "
+                           "(re-seek is consumed exactly once and durably "
+                           "recorded; the identical command is safe on every "
+                           "restart)")
+    bad = _no_other(("--entry-policy", "--mode", "--phase", "--capital",
+                     "--expected-start-balance") + tuple(table),
+                    ("--live", "--yes", "--rearm-gate"),
+                    "the P2 gated recipe")
+    if bad is not None:
+        return _cli_refuse(bad)
+    for flag, canonical in table.items():
+        if flag not in values:
+            return _cli_refuse(f"the P2 gated recipe requires {flag} "
+                               f"{canonical}")
+        if not _cli_decimal_equal(values[flag], canonical):
+            return _cli_refuse(
+                f"{flag} {values[flag]!r} is not the tested P2 value "
+                f"{canonical}; only individually tested recipes run")
+    recipe = "p2-adopt" if expected_cents is not None else "p2-fresh"
+    return _profile(recipe, "gated-v1", expected=expected_cents,
+                    capital=capital_cents)
 
 
 _DIRECT_PROFILE = None
 if __name__ == "__main__":
     _DIRECT_PROFILE = _direct_match_recipe(sys.argv[1:])
     if _DIRECT_PROFILE is None:
-        print("*** DIRECT-RUN RECIPE REFUSED before MT5/state: command is not "
-              "one exact policy-qualified P1, P2, FUNDED or "
-              "CONTINUITY-EXPORT recipe, nor the exact SAFETY-RECOVERY "
-              "command; use only a documented exact command")
+        _reason = _DIRECT_REFUSAL[0] or "not a documented command"
+        print("*** COMMAND REFUSED before MT5/state: "
+              f"{_reason}. Supported: the documented P1/P2 gated and "
+              "immediate recipes, FUNDED, --selfcheck, --list-symbols, "
+              "--diagnose, --pause-new-risk, --resume-paused, "
+              "--flatten-and-stop --live, --export-continuity, "
+              "--recover-safety --live (flags in any order; unknown, "
+              "duplicate or contradictory flags and untested values are "
+              "refused)")
         raise SystemExit(5)
 
 _EARLY_AUTHORITY_CLI = __name__ == "__main__" and _DIRECT_PROFILE is not None
@@ -488,10 +660,9 @@ PHASE  = int(_argf("--phase", 1))
 LIVE   = "--live" in sys.argv
 DRY    = not LIVE
 BREAKER_PCT = _argf("--brk", BREAKER_PCT)
-MAX_LEVERAGE = _argf("--maxlev", MAX_LEVERAGE)
 _capital_cli = ((_DIRECT_PROFILE or {}).get("capital_cents") or 0) / 100.0
-SELFCHECK = False  # offline evidence hook only; no public direct recipe
-LIST_SYMS = False  # offline evidence hook only; no public direct recipe
+SELFCHECK = (_DIRECT_PROFILE or {}).get("recipe") == "selfcheck"
+LIST_SYMS = (_DIRECT_PROFILE or {}).get("recipe") == "list-symbols"
 ENABLE_ONF = False   # v12.7: ONF OFF; no direct recipe can override it — its entire
 # positive backtest P&L was shown to be a DST-calendar pairing artifact (25 multi-
 # month "overnight" returns; ex-artifact the sleeve is net NEGATIVE), and the live
@@ -531,7 +702,8 @@ _FULL_VIRTUAL_CAPITAL_POLICY = "full-virtual-account-v1"
 _CAMPAIGN_BASE_CAPITAL_POLICY = "campaign-base-real-mark-v1"
 _ANCHOR_RISK_POLICY = "proved-anchor-full-or-hold-v1"
 _DIRECT_AUTHORITY_PAYLOAD = {
-    "schema": "v389-direct-recipe-authority/1",
+    "schema": "updated-v376-direct-recipe-authority/1",
+    "grammar": "strict-order-independent-v1",
     "capital_policy": _CAMPAIGN_BASE_CAPITAL_POLICY,
     "anchor_risk_policy": _ANCHOR_RISK_POLICY,
     "entry_policies_by_recipe": {
@@ -541,13 +713,21 @@ _DIRECT_AUTHORITY_PAYLOAD = {
         "prior_closed_history": "allowed-p1-p2",
         "inventory": "account-wide-flat-orderless",
     },
-    "p1_gated": list(_DIRECT_P1_GATED),
-    "p1_immediate": list(_DIRECT_P1_IMMEDIATE),
-    "p2_gated": list(_DIRECT_P2_GATED),
-    "p2_immediate": list(_DIRECT_P2_IMMEDIATE),
-    "funded": list(_DIRECT_FUNDED),
-    "export": list(_DIRECT_EXPORT),
-    "recover": list(_DIRECT_RECOVER),
+    "recipe_gate_values": {
+        key: dict(sorted(value.items()))
+        for key, value in _RECIPE_GATE_VALUES.items()},
+    "immediate_recipes": {
+        "p1": ["--entry-policy immediate", "--mode grind", "--phase 1",
+               "--capital optional", "--live"],
+        "p2-standalone-immediate": [
+            "--entry-policy immediate", "--mode grind", "--phase 2",
+            "--capital required", "--live"],
+        "post_loss_multiplier": "1.0",
+    },
+    "maintenance_commands": [
+        "--selfcheck", "--list-symbols", "--diagnose", "--pause-new-risk",
+        "--resume-paused", "--flatten-and-stop --live",
+        "--export-continuity", "--recover-safety --live"],
     "seed_sha256": SHADOW_SEED_SHA256,
     "seed_manifest_sha256": SHADOW_MANIFEST_SHA256,
 }
@@ -622,20 +802,34 @@ if START_DOWN_DAYS > 10:
     # never arming.
     print("--start-down-days must be <= 10 (the shadow keeps a 10-session "
           "return history)"); sys.exit(1)
-# The exact matcher at the top of the file is the sole public CLI authority.
-# These names are kept as an inspectable table for documentation/evidence;
-# variable amount/path fields are accepted only in the ordered suffix defined
-# by ``_direct_match_recipe``.
-_RELEASE_RECIPE_PREFIX = {
-    "p1-gated": _DIRECT_P1_GATED,
-    "p1-immediate": _DIRECT_P1_IMMEDIATE,
-    "p2-fresh": _DIRECT_P2_GATED,
-    "p2-adopt": _DIRECT_P2_GATED + (
-        "--expected-start-balance", "<amount>"),
-    "p2-standalone-immediate": _DIRECT_P2_IMMEDIATE,
-    "export": _DIRECT_EXPORT,
-    "recover": _DIRECT_RECOVER,
-    "funded": _DIRECT_FUNDED + ("--expected-start-balance", "<amount>"),
+# The strict order-independent matcher at the top of the file is the sole
+# public CLI authority.  This table documents one canonical spelling of each
+# tested command (flags may be typed in any order).
+_RELEASE_RECIPE_CANONICAL = {
+    "p1-gated": ("--mode grind --phase 1 --start-min-dd 0.02 "
+                 "--start-bounce 0.005 --post-loss-mult 0.75 --live"),
+    "p1-immediate": ("--entry-policy immediate --mode grind --phase 1 "
+                     "--capital <amount> --live"),
+    "p2-fresh": ("--mode grind --phase 2 --start-min-dd 0.01 "
+                 "--start-bounce 0.005 --start-cap 10 --rearm-gate "
+                 "--post-loss-mult 0.75 --capital <amount> --live"),
+    "p2-adopt": ("--mode grind --phase 2 --start-min-dd 0.01 "
+                 "--start-bounce 0.005 --start-cap 10 --rearm-gate "
+                 "--post-loss-mult 0.75 --capital <amount> "
+                 "--expected-start-balance <amount> --live"),
+    "p2-standalone-immediate": ("--entry-policy immediate --mode grind "
+                                "--phase 2 --capital <amount> --live"),
+    "funded": ("--funded --tv 1.0 --brk 3.0 --start-min-dd 0.03 "
+               "--start-bounce 0 --post-loss-mult 0.75 "
+               "--expected-start-balance <amount> --live"),
+    "export": "--export-continuity",
+    "recover": "--recover-safety --live",
+    "diagnose": "--diagnose",
+    "selfcheck": "--selfcheck",
+    "list-symbols": "--list-symbols",
+    "pause": "--pause-new-risk",
+    "resume": "--resume-paused",
+    "flatten-stop": "--flatten-and-stop --live",
 }
 
 
@@ -645,8 +839,13 @@ def _release_recipe_contract_ok(argv):
 
 EXPORT_CONTINUITY = RELEASE_RECIPE_ID == "export"
 RECOVER_SAFETY = RELEASE_RECIPE_ID == "recover"
+DIAGNOSE = RELEASE_RECIPE_ID == "diagnose"
+PAUSE_NEW_RISK_CMD = RELEASE_RECIPE_ID == "pause"
+RESUME_PAUSED_CMD = RELEASE_RECIPE_ID == "resume"
+FLATTEN_AND_STOP = RELEASE_RECIPE_ID == "flatten-stop"
+ASSUME_YES = bool((_DIRECT_PROFILE or {}).get("assume_yes"))
 V376_P1_PATH_PINNED = False
-BOT_BUILD = "v3.8.9-fast-r4"
+BOT_BUILD = "v3.9.0-updated-v376"
 
 if MODE not in MODES:
     print(f"--mode must be one of {list(MODES)}"); sys.exit(1)
@@ -660,6 +859,66 @@ if FUNDED:
     TARGET = None                       # funded: no profit-target halt, no lock
     if "--brk" not in sys.argv:
         BREAKER_PCT = 3.0               # funded default; --brk still overrides
+
+
+def _render_interpreted_recipe():
+    """Lines describing the resolved economic recipe (printed before any
+    state binding; build-order section 1: the interpreted recipe, not raw
+    argv, is what binds to lifecycle state)."""
+    profile = _DIRECT_PROFILE or {}
+    recipe = profile.get("recipe")
+    lines = [f"[recipe] interpreted command: {recipe or 'module-import'}"]
+    if recipe in (None, "selfcheck", "list-symbols", "diagnose", "pause",
+                  "resume", "export", "recover", "flatten-stop"):
+        lines.append(f"[recipe]   canonical form: "
+                     f"{_RELEASE_RECIPE_CANONICAL.get(recipe, 'n/a')}")
+        return lines
+    lines.append(
+        f"[recipe]   entry policy {profile.get('entry_policy')} | mode "
+        f"{MODE} phase {PHASE} | live {LIVE}"
+        + (" | unattended --yes" if profile.get("assume_yes") else ""))
+    if FUNDED:
+        lines.append(
+            f"[recipe]   FUNDED economics: tv {CFG['tv']} | breaker "
+            f"{BREAKER_PCT}% | arm gate shadow-dd >= {START_MIN_DD*100:.1f}% "
+            f"(no bounce) | post-loss x{PL_MULT} | no profit-target halt")
+    else:
+        gate = ("immediate (no drawdown/bounce/cap/rearm wait)"
+                if profile.get("entry_policy") == IMMEDIATE_ENTRY_POLICY else
+                f"gated: dd >= {START_MIN_DD*100:.2f}% then bounce "
+                f">= {START_BOUNCE*100:.2f}%"
+                + (f", cap {START_CAP} sessions, re-arm once"
+                   if START_CAP > 0 else ""))
+        lines.append(f"[recipe]   entry {gate} | post-loss x{PL_MULT} | "
+                     f"target +{TARGET:.0%} | controller tv {CFG['tv']} "
+                     f"D {CFG['D']} B {CFG['B']} T {CFG['T']}")
+    capital_cents = profile.get("capital_cents")
+    if capital_cents is not None:
+        base = capital_cents / 100.0
+        parts = [f"[recipe]   declared capital base ${base:,.2f}"]
+        if TARGET is not None:
+            target_cents = capital_cents + (
+                capital_cents * int(round(TARGET * 10_000)) + 9_999) // 10_000
+            parts.append(f"target ${target_cents/100.0:,.2f}")
+        floor_cents = capital_cents * (
+            10_000 - int(round(FLOOR_PCT * 100.0))) // 10_000
+        parts.append(f"static floor ${floor_cents/100.0:,.2f}")
+        parts.append(f"daily allowance ${capital_cents*500//10_000/100.0:,.2f}")
+        parts.append(
+            f"breaker allowance "
+            f"${capital_cents*int(round(BREAKER_PCT*100))//10_000/100.0:,.2f}")
+        lines.append(" | ".join(parts))
+    else:
+        lines.append("[recipe]   no --capital: the observed flat balance "
+                     "becomes the campaign base at first binding")
+    if profile.get("expected_cents") is not None:
+        lines.append(f"[recipe]   expected start balance "
+                     f"${profile['expected_cents']/100.0:,.2f}")
+    if profile.get("mt5_path"):
+        lines.append(f"[recipe]   pinned MT5 terminal: {profile['mt5_path']}")
+    lines.append("[recipe]   this interpreted recipe (not raw argv) binds to "
+                 "lifecycle state")
+    return lines
 
 RESET_TZ = ZoneInfo("Europe/Prague")
 NY       = ZoneInfo("America/New_York")
@@ -36568,6 +36827,32 @@ def _main_impl():
             log("[WARN] exact typed direct recipe accepted as LIVE authority. "
                 "This process places REAL orders when every gate and health "
                 "proof opens.")
+
+    # Interpreted recipe is printed BEFORE any state binding so the operator
+    # sees exactly what the order-independent command resolved to.
+    for _line in _render_interpreted_recipe():
+        log(_line)
+
+    if LIVE:
+        # V376-style typed confirmation; --yes documents unattended/exact
+        # resume authority (watchdog-free restarts with the identical
+        # command).  A non-interactive console without --yes aborts safely.
+        if ASSUME_YES:
+            log("!! --live --yes: typed confirmation SKIPPED (unattended "
+                "exact-resume mode). This process places REAL orders the "
+                "moment its proofs open.")
+        else:
+            try:
+                _typed = input("Type EXACTLY 'I ACCEPT LIVE' to proceed: ")
+            except (EOFError, OSError, KeyboardInterrupt):
+                _typed = ""
+            if _typed.strip() != "I ACCEPT LIVE":
+                print("aborted.")
+                try:
+                    mt5.shutdown()
+                except Exception:
+                    pass
+                return
 
     st = load_state()
     # The selected terminal identity is captured only for a genuinely empty
