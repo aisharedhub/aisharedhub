@@ -1959,7 +1959,9 @@ _TRANSIENT_RETCODES = frozenset({
     10028,  # request/order locked
 })
 _MAX_MT5_TICKET = 18_446_744_073_709_551_615
-_DAY_ROLL_TXN_SCHEMA = "day_roll_txn/1"
+_V389_DAY_ROLL_TXN_SCHEMA = "day_roll_txn/1"
+_DAY_ROLL_TXN_SCHEMA = "day_roll_txn/2"
+_APPLIED_EXPOSURE_SCHEMA = "applied_exposure/1"
 _CONTINUITY_EXPORT_TXN_SCHEMA = "continuity_export_txn/3"
 _CONTINUITY_EXPORT_STEP_SCHEMA = "continuity_export_step/1"
 _CONTINUITY_EXPORT_MAX_STEPS = 5
@@ -3437,6 +3439,10 @@ def _validate_safety_records_impl(
                 and not _valid_controller_ledger(
                     st.get("_controller_ledger"))):
             problems.append("_controller_ledger malformed/conflicting")
+        if ("_applied_exposure" in st
+                and not _valid_applied_exposure(
+                    st.get("_applied_exposure"))):
+            problems.append("_applied_exposure malformed/conflicting")
         if ("_predecessor_takeover" in st
                 and not _valid_predecessor_takeover_txn(
                     st.get("_predecessor_takeover"), st)):
@@ -22022,19 +22028,41 @@ def _arming_clock_reset(st, sh_):
            f"sessions (remaining holds preserved)" if _n_reb else ""))
     return True
 
+def _day_roll_audit_fields(source):
+    """requested-vs-proven audit fields for a freshly minted /2 pend."""
+    requested = source.get("_requested_L") if isinstance(source, dict) else None
+    exposure = source.get("_applied_exposure") if isinstance(source, dict) else None
+    sleeves = None
+    if (isinstance(exposure, dict)
+            and _valid_applied_exposure(exposure)):
+        sleeves = copy.deepcopy(exposure.get("sleeves"))
+    return {
+        "requested_L": (float(requested) if _finite_num(requested)
+                        and 0.0 <= float(requested) <= MAX_LEVERAGE
+                        else None),
+        "sleeves": sleeves,
+    }
+
+
 def _valid_day_roll_txn_impl(txn, dc=None):
     """Strict identity/shape check for a deferred account day roll."""
     base = {"schema", "stage", "session", "next_session", "last_eq",
             "applied_L", "sess_dip", "standdown", "end_eq"}
     if not isinstance(txn, dict):
         return False
+    schema = txn.get("schema")
+    if schema == _DAY_ROLL_TXN_SCHEMA:
+        base |= {"requested_L", "sleeves"}
+    elif schema != _V389_DAY_ROLL_TXN_SCHEMA:
+        # day_roll_txn/1 remains recognizable solely for the exact r4
+        # migration source; every new pend is minted as /2 with the
+        # requested-vs-proven audit fields.
+        return False
     stage = txn.get("stage")
     if not isinstance(stage, str) or stage not in {
             "WAIT_FINALITY", "READY"}:
         return False
     if set(txn) != base:
-        return False
-    if txn.get("schema") != _DAY_ROLL_TXN_SCHEMA:
         return False
     try:
         prev = date.fromisoformat(txn["session"])
@@ -22055,6 +22083,24 @@ def _valid_day_roll_txn_impl(txn, dc=None):
         return False
     if not _finite_num(txn.get("end_eq"), positive=True):
         return False
+    if schema == _DAY_ROLL_TXN_SCHEMA:
+        requested = txn.get("requested_L")
+        if requested is not None and (
+                not _finite_num(requested)
+                or not 0.0 <= float(requested) <= MAX_LEVERAGE):
+            return False
+        sleeves = txn.get("sleeves")
+        if sleeves is not None:
+            if (not isinstance(sleeves, dict)
+                    or not set(sleeves) <= (set(SHADOW_W) | {"ORB"})):
+                return False
+            for row in sleeves.values():
+                if (not isinstance(row, dict)
+                        or set(row) != {"lots", "frac"}
+                        or not _finite_num(row.get("lots"))
+                        or not _finite_num(row.get("frac"))
+                        or abs(float(row["frac"])) > MAX_LEVERAGE):
+                    return False
     if isinstance(dc, dict):
         if dc.get("session") != txn["session"]:
             return False
@@ -22076,9 +22122,11 @@ def _day_roll_preimage_sha256(txn):
     """Hash the immutable interval fields; WAIT→READY keeps the same hash."""
     if not _valid_day_roll_txn(txn):
         return None
-    image = {key: txn[key] for key in (
-        "schema", "session", "next_session", "last_eq", "end_eq",
-        "applied_L", "sess_dip", "standdown")}
+    keys = ["schema", "session", "next_session", "last_eq", "end_eq",
+            "applied_L", "sess_dip", "standdown"]
+    if txn.get("schema") == _DAY_ROLL_TXN_SCHEMA:
+        keys += ["requested_L", "sleeves"]
+    image = {key: txn.get(key) for key in keys}
     try:
         return hashlib.sha256(json.dumps(
             image, sort_keys=True, separators=(",", ":"),
@@ -22225,6 +22273,8 @@ def _promote_next_interval_candidate(dc, st=None, carry_prior_dip=False):
         "applied_L": float(candidate["applied_L"]),
         "sess_dip": sess_dip,
         "standdown": bool(candidate["standdown"]),
+        "requested_L": None,
+        "sleeves": None,
     }
     dc["pending"] = pending
     dc.pop("next_interval_candidate", None)
@@ -24975,6 +25025,7 @@ def _capture_ny17_boundary_mark(st, account):
                 "applied_L": float(st.get("_last_L", 0.0)),
                 "sess_dip": float(st.get("_sess_dip", 0.0)),
                 "standdown": bool(st.get("_sd_sess") == dc_session),
+                **_day_roll_audit_fields(st),
             }
             work = copy.deepcopy(st)
             work["_daycount"]["pending"] = pending
@@ -25027,6 +25078,7 @@ def _capture_ny17_boundary_mark(st, account):
         "applied_L": float(st.get("_last_L", 0.0)),
         "sess_dip": float(st.get("_sess_dip", 0.0)),
         "standdown": bool(st.get("_sd_sess") == dc_session),
+        **_day_roll_audit_fields(st),
     }
     work = copy.deepcopy(st)
     work["_daycount"]["pending"] = pending
@@ -25230,6 +25282,7 @@ def _prepare_ny17_preclose_mark(st):
             "applied_L": float(work.get("_last_L", 0.0)),
             "sess_dip": float(work.get("_sess_dip", 0.0)),
             "standdown": bool(work.get("_sd_sess") == current),
+            **_day_roll_audit_fields(work),
         }
         work["_daycount"]["pending"] = pending
         valid_mark = _valid_day_roll_txn(pending, work["_daycount"])
@@ -25514,6 +25567,7 @@ def roll_day_state(st, start_bal, continuity_step=None,
             "standdown": bool(
                 continuity_base["standdown"] if continuity_base is not None
                 else st.get("_sd_sess") == prev_sess),
+            **_day_roll_audit_fields(st),
         }
         if post_hit_step is not None:
             # The pending day preimage and its post-hit hash are one atomic
@@ -35276,6 +35330,7 @@ def _target_watch_persist_wait_records(st, from_session, need_dc, need_sh):
                 "applied_L": float(st["_last_L"]),
                 "sess_dip": float(st["_sess_dip"]),
                 "standdown": bool(st.get("_sd_sess") == from_session),
+                **_day_roll_audit_fields(st),
             }
             dc["pending"] = pending
         if not _valid_day_roll_txn(pending, dc):
@@ -36534,6 +36589,144 @@ def _emit_console(text):
             _daily_log_write(line)
     except Exception:
         pass
+
+
+def _valid_applied_exposure(value):
+    """Per-sleeve broker-proved applied exposure record (defect-2 repair)."""
+    keys = {"schema", "session", "requested_L", "proven_L", "matched",
+            "sleeves"}
+    if (not isinstance(value, dict) or set(value) != keys
+            or value.get("schema") != _APPLIED_EXPOSURE_SCHEMA
+            or _continuity_session(value.get("session")) is None
+            or not isinstance(value.get("matched"), bool)):
+        return False
+    for lev_key in ("requested_L", "proven_L"):
+        lev = value.get(lev_key)
+        if (not _finite_num(lev)
+                or not 0.0 <= float(lev) <= MAX_LEVERAGE):
+            return False
+    sleeves = value.get("sleeves")
+    if (not isinstance(sleeves, dict)
+            or not sleeves
+            or not set(sleeves) <= (set(SHADOW_W) | {"ORB"})):
+        return False
+    for row in sleeves.values():
+        if (not isinstance(row, dict) or set(row) != {"lots", "frac"}
+                or not _finite_num(row.get("lots"))
+                or not _finite_num(row.get("frac"))
+                or abs(float(row["frac"])) > MAX_LEVERAGE):
+            return False
+    return True
+
+
+_APPLIED_UNPROVED_LOGGED = [None]
+
+
+def _record_applied_exposure(st, ai, sleeve_targets, requested_L,
+                             session_key):
+    """Persist broker-PROVED applied exposure after the reconcile pass.
+
+    The r4 defect-2 repair: ``_last_L`` (the divisor for booked returns and
+    dips) is never a stale requested value.  Each poll that completed its
+    reconciles with no pending intents and readable inventory re-proves the
+    applied daily leverage from actual per-sleeve broker exposure:
+      * inventory within the reconcile deadband of every ready sleeve's
+        target -> the requested controller leverage is PROVEN applied;
+      * otherwise (blocked increases, partial fills, reductions in flight)
+        -> the inventory-implied leverage is recorded instead — temporary
+        under-measurement over accidental over-measurement.
+    ORB exposure is recorded per-sleeve but never enters the daily divisor.
+    DRY mode keeps the requested value (no broker inventory exists).
+    """
+    if not isinstance(st, dict):
+        return None
+    st["_requested_L"] = float(requested_L)
+    if DRY:
+        st["_last_L"] = float(requested_L)
+        return float(requested_L)
+    if ("_order_intent" in st or "_close_intent" in st
+            or _ORDERS_UNKNOWN[0] or _POSITIONS_UNKNOWN[0]
+            or _ACCOUNT_CONFLICT[0]):
+        return None
+    sizing_eq = _sizing_mark(getattr(ai, "equity", None), st)
+    if not _finite_num(sizing_eq, positive=True):
+        return None
+    sleeves = {}
+    target_sum = 0.0
+    actual_sum = 0.0
+    matched = True
+    any_ready = False
+    for name in sorted(sleeve_targets) + ["ORB"]:
+        symbol = SLEEVE_SYMBOL.get(name)
+        magic = MAGIC.get(name)
+        if symbol is None or magic is None:
+            return None
+        rows = positions_for(magic, symbol)
+        if rows is None:
+            return None
+        signed_lots = 0.0
+        frac = 0.0
+        if rows:
+            try:
+                info = mt5.symbol_info(symbol)
+                tick = mt5.symbol_info_tick(symbol)
+            except Exception:
+                return None
+            spec = _trade_spec_from_info(info) if info is not None else None
+            bid = getattr(tick, "bid", None)
+            ask = getattr(tick, "ask", None)
+            if (spec is None or not _finite_num(bid, positive=True)
+                    or not _finite_num(ask, positive=True)):
+                return None            # live exposure must be priceable
+            price = (float(bid) + float(ask)) / 2.0
+            signed_lots = sum(
+                float(p.volume)
+                * (1.0 if p.type == mt5.POSITION_TYPE_BUY else -1.0)
+                for p in rows)
+            frac = (signed_lots * float(spec["trade_contract_size"])
+                    * price / float(sizing_eq))
+        sleeves[name] = {"lots": float(signed_lots), "frac": float(frac)}
+        if name == "ORB":
+            continue                   # intraday sleeve: audit only
+        weight_frac, target_pos, ready = sleeve_targets[name]
+        if not ready:
+            continue                   # blind feed: no proof either way
+        any_ready = True
+        desired = max(-MAX_SLEEVE_FRAC, min(
+            MAX_SLEEVE_FRAC,
+            float(weight_frac) * float(target_pos) * float(requested_L)))
+        target_sum += abs(float(weight_frac) * float(target_pos))
+        actual_sum += abs(frac)
+        tolerance = max(0.02, 0.15 * max(abs(desired), abs(frac)))
+        if abs(frac - desired) > tolerance:
+            matched = False
+    if not any_ready:
+        return None
+    if matched:
+        proven = float(requested_L)
+    elif target_sum > 1e-9:
+        proven = max(0.0, min(MAX_LEVERAGE,
+                              float(actual_sum) / float(target_sum)))
+        if _APPLIED_UNPROVED_LOGGED[0] != session_key:
+            _APPLIED_UNPROVED_LOGGED[0] = session_key
+            log(f"  [applied] inventory != targets: proven daily leverage "
+                f"{proven:.2f}x recorded (requested {requested_L:.2f}x) — "
+                "booked returns divide by what was actually applied")
+    else:
+        return None                    # exposure with no live targets: keep prior
+    record = {
+        "schema": _APPLIED_EXPOSURE_SCHEMA,
+        "session": str(session_key),
+        "requested_L": float(requested_L),
+        "proven_L": float(proven),
+        "matched": bool(matched),
+        "sleeves": sleeves,
+    }
+    if not _valid_applied_exposure(record):
+        return None
+    st["_applied_exposure"] = record
+    st["_last_L"] = float(proven)
+    return float(proven)
 
 
 def _render_startup_block(ai, st, start_balance, sizing_base):
@@ -38326,6 +38519,16 @@ def _main_impl():
                     f"reconcile SKIPPED (unknown != zero; retries every poll, "
                     f"logged once per session)")
             place_target(SYM_NAS, WEIGHTS["S8V"],  s8v_target, target_L, MAGIC["S8V"], "S8V-ladder")
+            # Defect-2 repair: after the reconcile pass, prove the actually
+            # applied per-sleeve exposure from broker inventory and persist
+            # requested vs proven leverage (see _record_applied_exposure).
+            _record_applied_exposure(
+                st, ai,
+                {"XAUM": (WEIGHTS["XAUM"], xaum, _sig_ready(xau_c)),
+                 "XAUB": (WEIGHTS["XAUB"], xaub, _sig_ready(xau_c)),
+                 "BTC": (WEIGHTS["BTC"], btcm, _sig_ready(btc_c)),
+                 "S8V": (WEIGHTS["S8V"], s8v_target, nas_c is not None)},
+                target_L, _sk_diag)
             # v3.2.1: hourly sleeve diagnostic — makes silence self-explanatory.
             # Distinguishes "market closed (gated)" from "reconciled, nothing to
             # do" from "signal is zero", which a quiet log otherwise cannot.
