@@ -161,5 +161,20 @@ stx = {"_controller_ledger": {"schema": "controller_ledger/1",
 ok(not b._validate_safety_records(stx, log_bad=False),
    "malformed ledger fails safety records")
 
+# --- omitted-vs-numeric contradiction: never fabricated as zero ---
+st_o = {}
+assert b._controller_ledger_bootstrap_from_seed(st_o, seed)
+con = st_o["_controller_ledger"]
+assert b._valid_controller_ledger(con)
+row = con["entries"][10]
+row["account_ret"] = 0.0
+row["flags"] = sorted(set(row.get("flags", []))
+                      | {"account-return-omitted"})
+ok(not b._valid_controller_ledger(con),
+   "a row flagged account-return-omitted can never carry a numeric return")
+row["account_ret"] = None
+ok(b._valid_controller_ledger(con),
+   "the honestly-omitted form (None + flag) stays valid")
+
 print(f"test_controller_ledger: {PASS[0]} pass, {FAIL[0]} fail")
 sys.exit(1 if FAIL[0] else 0)

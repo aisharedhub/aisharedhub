@@ -341,5 +341,57 @@ with contextlib.redirect_stdout(io.StringIO()):
 ok("_pause_new_risk" in st3,
    "flattened r4 folder holds the pause while the migration is pending")
 
+# ---- the pause ALONE blocks an otherwise fully-authorized lease entry ----
+# End-to-end economic attribution: the same folder, the same lease
+# machinery — the only variable between zero sends and four sends is the
+# operator pause.  (The bare-state checks above cannot isolate the pause
+# cause: an unproven anchor also blocks there.)
+import startharness as shar
+from datetime import datetime, timezone
+
+P2_IMM = ["--entry-policy", "immediate", "--mode", "grind", "--phase", "2",
+          "--capital", "200000", "--live"]
+bl, fakel, marketl, brokerl, wdl = shar.boot(P2_IMM)
+bl.PAUSE_REQUEST_FILE = os.path.join(wdl, "pause_new_risk.request")
+bl.RESUME_REQUEST_FILE = os.path.join(wdl, "resume_new_risk.request")
+with contextlib.redirect_stdout(io.StringIO()):
+    shar.drive_to_authorized(bl, marketl)
+ok(bl._write_operator_request(bl.PAUSE_REQUEST_FILE),
+   "pause request placed before the lease opens")
+with contextlib.redirect_stdout(io.StringIO()):
+    shar.run_polls(bl, marketl, 2)          # consumed pre-lease at poll head
+ok(bl._valid_pause_new_risk(
+       (bl._RUNTIME_STATE[0] or {}).get("_pause_new_risk")),
+   "pause durably recorded before the lease")
+shar.set_clock(bl, datetime(2026, 8, 31, 22, 5, 40, tzinfo=timezone.utc))
+with contextlib.redirect_stdout(io.StringIO()):
+    shar.run_polls(bl, marketl, 16)
+ok(len(fakel.sent) == 0 and len(fakel.positions) == 0,
+   f"the pause ALONE blocks the otherwise-authorized lease entries "
+   f"({len(fakel.sent)} sends)")
+# resume after the lease window: the missed lease is never caught up late,
+# and the NEXT session's lease then sends — attribution complete
+shar.set_clock(bl, datetime(2026, 8, 31, 22, 40, 0, tzinfo=timezone.utc))
+ok(bl._write_operator_request(bl.RESUME_REQUEST_FILE),
+   "resume request placed after the lease window")
+with contextlib.redirect_stdout(io.StringIO()):
+    shar.run_polls(bl, marketl, 4)
+ok("_pause_new_risk" not in (bl._RUNTIME_STATE[0] or {}),
+   "resume clears the pause")
+ok(len(fakel.sent) == 0, "the missed lease is never caught up late")
+for _when, _polls, _grow in (
+        ((2026, 9, 1, 21, 0, 30), 3, False),
+        ((2026, 9, 1, 21, 5, 0), 6, True),
+        ((2026, 9, 1, 22, 0, 20), 6, False),
+        ((2026, 9, 1, 22, 5, 40), 16, False)):
+    shar.set_clock(bl, datetime(*_when, tzinfo=timezone.utc))
+    if _grow:
+        marketl.grow()
+    with contextlib.redirect_stdout(io.StringIO()):
+        shar.run_polls(bl, marketl, _polls)
+ok(len(fakel.sent) == 4 and len(fakel.positions) == 4,
+   f"the resumed folder places the four entries at the NEXT lease "
+   f"({len(fakel.sent)} sends)")
+
 print(f"test_operator_commands: {PASS[0]} pass, {FAIL[0]} fail")
 sys.exit(1 if FAIL[0] else 0)

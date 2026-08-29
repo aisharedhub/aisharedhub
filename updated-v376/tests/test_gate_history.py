@@ -224,6 +224,32 @@ ok(sh3["gate_low"] == 0.97, "deeper close folds the low AFTER the test")
 sh3["gate_eq"] = 0.97 * 1.0051
 ok(b._check_arm(sh3) is True, "bounce re-measured off the true deeper low")
 
+# exact-EQUALITY probes at a dyadic threshold (2^-5).  With 0.02/0.005 the
+# boundary itself is unreachable in IEEE-754 (fl(q-1.0) is a multiple of
+# 2^-53 near these magnitudes while the threshold constant is not), so the
+# inclusive-vs-exclusive distinction is only observable where the boundary
+# is exactly representable: g_dd == -START_MIN_DD and eq/low-1 == START_BOUNCE.
+_dd_save, _bounce_save = b.START_MIN_DD, b.START_BOUNCE
+b.START_MIN_DD = b.START_BOUNCE = 0.03125
+she = {"gate_eq": 0.96875, "gate_peak": 1.0}     # g_dd == -0.03125 EXACTLY
+ok(b._check_arm(she) is False and she.get("gate_crossed") is True,
+   "crossing at the exact dyadic boundary crosses (inclusive <=)")
+she2 = {"gate_eq": math.nextafter(0.96875, 1.0), "gate_peak": 1.0}
+b._check_arm(she2)
+ok("gate_crossed" not in she2, "one ulp shallower does not cross")
+shbe = {"gate_eq": 1.0, "gate_peak": 1.25}       # deep cross seeds low = 1.0
+b._check_arm(shbe)
+assert shbe["gate_low"] == 1.0
+shbe["gate_eq"] = 1.03125                        # eq/low - 1 == 0.03125 EXACTLY
+ok(b._check_arm(shbe) is True and shbe.get("armed") is True,
+   "bounce at the exact dyadic boundary arms (inclusive >=)")
+shbe2 = {"gate_eq": 1.0, "gate_peak": 1.25}
+b._check_arm(shbe2)
+shbe2["gate_eq"] = math.nextafter(1.03125, 0.0)
+ok(b._check_arm(shbe2) is False and shbe2.get("armed") is None,
+   "one ulp under the exact dyadic boundary does not arm")
+b.START_MIN_DD, b.START_BOUNCE = _dd_save, _bounce_save
+
 # down-days streak: a flat 0.0 session breaks it (backtest r<0 definition)
 b.START_DOWN_DAYS = 2
 sh4 = {"gate_eq": 1.0, "gate_peak": 1.0, "ret_hist": [-0.01, -0.02]}

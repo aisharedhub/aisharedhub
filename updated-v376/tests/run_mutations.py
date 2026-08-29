@@ -41,8 +41,10 @@ MUTANTS = [
      "return float(max(L, 0.0))",
      "test_formula_equivalence.py"),
     ("dip guard disabled",
-     "if max_dip20 > 0: L = min(L, THETA*(BREAKER_PCT/100.0)/max_dip20)",
-     "if False: L = min(L, THETA*(BREAKER_PCT/100.0)/max_dip20)",
+     "    if max_dip20 and max_dip20 > 0:\n"
+     "        L = min(L, THETA * (BREAKER_PCT / 100.0) / max_dip20)",
+     "    if False:\n"
+     "        L = min(L, THETA * (BREAKER_PCT / 100.0) / max_dip20)",
      "test_formula_equivalence.py"),
     # -- dated controller ledger (defect-1 repair) --
     ("ledger accepts unbounded session gaps",
@@ -69,8 +71,12 @@ MUTANTS = [
      "test_operator_commands.py"),
     # -- exactly-once order engine --
     ("intent token no longer stamped on the request",
-     'req["comment"] = intent["token"]',
-     'req["comment"] = ""',
+     "    if intent is None:\n"
+     "        return _NOT_ATTEMPTED\n"
+     '    req["comment"] = intent["token"]',
+     "    if intent is None:\n"
+     "        return _NOT_ATTEMPTED\n"
+     '    req["comment"] = ""',
      "test_order_routes.py"),
     ("rejection id guard neutralized",
      "def _negative_receipt_ids_are_zero(result):",
@@ -78,9 +84,17 @@ MUTANTS = [
      "test_order_routes.py"),
     ("terminal implied fill always full",
      "    implied_fill = initial - remaining\n"
-     "    if not _terminal_fill_matrix_ok(",
+     "    if not _terminal_fill_matrix_ok(\n"
+     "            state, implied_fill, requested, remaining, mode):\n"
+     '        return "violation"\n'
+     "    if abs(implied_fill - fill_volume) > 1e-9:\n"
+     "        # Terminal-order",
      "    implied_fill = initial\n"
-     "    if not _terminal_fill_matrix_ok(",
+     "    if not _terminal_fill_matrix_ok(\n"
+     "            state, implied_fill, requested, remaining, mode):\n"
+     '        return "violation"\n'
+     "    if abs(implied_fill - fill_volume) > 1e-9:\n"
+     "        # Terminal-order",
      "test_order_routes.py"),
     # -- account singleton --
     ("account singleton always acquires",
