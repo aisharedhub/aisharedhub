@@ -73,7 +73,8 @@ never part of this archive.
 
 To run the maintainer suites from an extraction, first copy the live
 folder to the layout the harnesses resolve
-(`cp -r DEFAULT build`, giving `build/` next to `maintainer/`), then run
+(`cp -r DEFAULT maintainer/build`, giving `build/` next to `tests/`
+inside `maintainer/`), then run
 each suite from inside `maintainer/tests/`. Suites that replay the live
 r4 evidence skip cleanly unless `UPDATED_V376_EVIDENCE_DIR` points at
 the (never-distributed) evidence files.
