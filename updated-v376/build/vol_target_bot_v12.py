@@ -869,7 +869,7 @@ RESUME_PAUSED_CMD = RELEASE_RECIPE_ID == "resume"
 FLATTEN_AND_STOP = RELEASE_RECIPE_ID == "flatten-stop"
 ASSUME_YES = bool((_DIRECT_PROFILE or {}).get("assume_yes"))
 V376_P1_PATH_PINNED = False
-BOT_BUILD = "v3.9.0-updated-v376"
+BOT_BUILD = "v3.9.1-updated-v376"
 
 if MODE not in MODES:
     print(f"--mode must be one of {list(MODES)}"); sys.exit(1)
@@ -17311,7 +17311,7 @@ def _continuity_payload(st, _skip_txn_check=False):
         raise ValueError("continuity producer daycount session invalid") from exc
     if not _finite_num(dc.get("last_eq"), positive=True):
         raise ValueError("continuity producer daycount equity invalid")
-    if _VOL_HISTORY_REPAIRED_FROM_SEED[0]:
+    if _VOL_HISTORY_REPAIRED_FROM_SEED[0] and not _window_live_proven(st):
         raise ValueError("book-return history was repaired from seed this boot")
     sh = copy.deepcopy(st.get("shadow"))
     if not isinstance(sh, dict) or not sh.get("backfilled"):
@@ -17469,6 +17469,56 @@ def _continuity_history_frontier_ok(st):
                                  rel_tol=0.0, abs_tol=1e-12))
 
 
+def _window_live_proven(st):
+    """True when the CURRENT 20-observation window derives entirely from
+    dated live-account ledger rows.
+
+    The process-wide repaired-from-seed latch is deliberately blunt: a
+    virgin first start installs the pinned seed and latches for the whole
+    process life, even after every seed row has been displaced by proven
+    live observations.  Exporting continuity is legitimate exactly when the
+    window's own dated provenance shows no seed/backfill material remains —
+    proven from the ledger, never from a process flag."""
+    try:
+        ledger = st.get("_controller_ledger") if isinstance(st, dict) else None
+        if not _valid_controller_ledger(ledger):
+            return False
+        live = 0
+        for entry in reversed(ledger["entries"]):
+            if entry.get("book_ret") is None:
+                continue          # standdown rows hold the chain, not values
+            if entry.get("source") != "live-account":
+                return False
+            live += 1
+            if live >= VOL_LOOKBACK:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def _continuity_expected_identity(st):
+    """The identity a continuity/target record must match right now.
+
+    After the boot identity bind the live EXPECTED pair is authoritative.
+    Before it (load-time semantic image selection runs long before any MT5
+    attach), the image is judged self-consistently against its own bound
+    mt5_identity; the boot identity gate still refuses a wrong live account
+    before any state mutation or order.  Returns (None, None) when no
+    authority exists — callers stay fail-closed."""
+    if EXPECTED_LOGIN is not None and EXPECTED_SERVER is not None:
+        return EXPECTED_LOGIN, EXPECTED_SERVER
+    saved = st.get("mt5_identity") if isinstance(st, dict) else None
+    if (isinstance(saved, dict) and set(saved) == {"login", "server"}
+            and isinstance(saved.get("login"), int)
+            and not isinstance(saved.get("login"), bool)
+            and saved.get("login", 0) > 0
+            and isinstance(saved.get("server"), str)
+            and bool(saved.get("server"))):
+        return saved["login"], saved["server"]
+    return None, None
+
+
 def _continuity_canonical_value(value):
     """Convert one authority object to strict, finite canonical JSON data."""
     if value is None or isinstance(value, (str, bool)):
@@ -17623,7 +17673,8 @@ def _continuity_economic_state_hash(st):
 def _continuity_export_baseline(st, origin_session):
     """Freeze every economic input needed to prove one terminal fold."""
     if (not isinstance(st, dict) or not _continuity_history_frontier_ok(st)
-            or _VOL_HISTORY_REPAIRED_FROM_SEED[0]):
+            or (_VOL_HISTORY_REPAIRED_FROM_SEED[0]
+                and not _window_live_proven(st))):
         return None
     dc = st.get("_daycount"); sh = st.get("shadow")
     if (not isinstance(dc, dict) or set(dc) != {"session", "last_eq"}
@@ -17743,6 +17794,35 @@ def _continuity_new_export_txn(st, ai, origin_reason):
         return None
 
 
+def _continuity_vector_digest(values):
+    """Digest one symbol's through-history vector.
+
+    A symbol may be legitimately ABSENT for a leading span of the master
+    calendar (BTC starts years after NAS/XAU): bind the exact count of
+    leading missing values plus the full finite suffix.  An interior or
+    trailing gap after the first finite value is data corruption and
+    refuses (None) — exactly as strict as the original all-finite rule
+    for every symbol whose history spans the whole calendar."""
+    try:
+        arr = np.asarray(values, float)
+    except Exception:
+        return None
+    if arr.ndim != 1:
+        return None
+    finite = np.isfinite(arr)
+    if not bool(finite.any()):
+        return None
+    first = int(np.argmax(finite))
+    tail = arr[first:]
+    if (len(tail) < 2 or not np.all(np.isfinite(tail))
+            or np.any(tail <= 0)):
+        return None
+    return hashlib.sha256(
+        str(first).encode("ascii") + b"|"
+        + b"".join(float(value).hex().encode("ascii") + b"\n"
+                   for value in tail)).hexdigest()
+
+
 def _continuity_bundle_digest(bundle, target_ord=None):
     if not isinstance(bundle, dict):
         return None
@@ -17770,17 +17850,11 @@ def _continuity_bundle_digest(bundle, target_ord=None):
         # classification and its exact prior prefix, while ignoring unrelated
         # XAU/BTC recovery on a proven no-master-session day.
         authority["nas_status"] = status.get(SYM_NAS)
-        try:
-            values = np.asarray(bundle.get("through", {}).get(SYM_NAS), float)
-            if (values.ndim != 1 or len(values) < 2
-                    or not np.all(np.isfinite(values))
-                    or np.any(values <= 0)):
-                return None
-            authority["nas_through_sha256"] = hashlib.sha256(
-                b"".join(float(value).hex().encode("ascii") + b"\n"
-                         for value in values)).hexdigest()
-        except Exception:
+        digest = _continuity_vector_digest(
+            bundle.get("through", {}).get(SYM_NAS))
+        if digest is None:
             return None
+        authority["nas_through_sha256"] = digest
     else:
         authority["status"] = {sym: status.get(sym)
                                for sym in (SYM_NAS, SYM_XAU, SYM_BTC)}
@@ -17789,17 +17863,10 @@ def _continuity_bundle_digest(bundle, target_ord=None):
             return None
         vectors = {}
         for sym in (SYM_NAS, SYM_XAU, SYM_BTC):
-            try:
-                values = np.asarray(through[sym], float)
-                if (values.ndim != 1 or len(values) < 2
-                        or not np.all(np.isfinite(values))
-                        or np.any(values <= 0)):
-                    return None
-                vectors[sym] = hashlib.sha256(
-                    b"".join(float(value).hex().encode("ascii") + b"\n"
-                             for value in values)).hexdigest()
-            except Exception:
+            digest = _continuity_vector_digest(through.get(sym))
+            if digest is None:
                 return None
+            vectors[sym] = digest
         authority["through_sha256"] = vectors
     try:
         return _continuity_hash(authority)
@@ -18501,7 +18568,8 @@ def _export_continuity(st, path=None):
         log("*** continuity export refused: account-wide flat/cash sandwich "
             "could not be proved")
         return False
-    if (_VOL_HISTORY_REPAIRED_FROM_SEED[0]
+    if ((_VOL_HISTORY_REPAIRED_FROM_SEED[0]
+         and not _window_live_proven(st))
             or not _continuity_history_frontier_ok(st)):
         log("*** continuity export refused: exact live 20-session return/dip "
             "history is unavailable or was repaired from seed this boot")
@@ -20942,14 +21010,17 @@ def _valid_legacy_target_watch_impl(watch, st=None):
             or catchup.get("config_sha256") != _continuity_config_id()):
         return False
     account = catchup.get("account")
+    exp_login, exp_server = _continuity_expected_identity(st)
     if (not isinstance(account, dict)
             or set(account) != {"login", "server", "currency",
                                 "balance_cents", "equity_cents"}
             or isinstance(account.get("login"), bool)
             or not isinstance(account.get("login"), int)
-            or account["login"] <= 0 or account["login"] != EXPECTED_LOGIN
+            or account["login"] <= 0
+            or (exp_login is not None and account["login"] != exp_login)
             or not isinstance(account.get("server"), str)
-            or not account["server"] or account["server"] != EXPECTED_SERVER
+            or not account["server"]
+            or (exp_server is not None and account["server"] != exp_server)
             or account.get("currency") != "USD"
             or isinstance(account.get("balance_cents"), bool)
             or not isinstance(account.get("balance_cents"), int)
@@ -21136,16 +21207,17 @@ def _valid_continuity_export_txn_impl(txn, st=None):
                 <= _CONTINUITY_EXPORT_MAX_STEPS):
         return False
     account = txn.get("account")
+    exp_login, exp_server = _continuity_expected_identity(st)
     if (not isinstance(account, dict)
             or set(account) != {"login", "server", "currency",
                                 "balance_cents", "equity_cents"}
             or isinstance(account.get("login"), bool)
             or not isinstance(account.get("login"), int)
             or account["login"] <= 0
-            or account["login"] != EXPECTED_LOGIN
+            or account["login"] != exp_login
             or not isinstance(account.get("server"), str)
             or not account["server"]
-            or account["server"] != EXPECTED_SERVER
+            or account["server"] != exp_server
             or account.get("currency") != "USD"
             or isinstance(account.get("balance_cents"), bool)
             or not isinstance(account.get("balance_cents"), int)
@@ -34149,10 +34221,29 @@ def _service_target_flat_watch(st, start_bal):
                     "target reached before first-start ledgers became complete"
                     if incomplete_bootstrap else None))
             if post is None:
-                post = _new_post_hit_catchup(
-                    st, ai, legacy_watch=legacy_watch,
-                    force_audit_reason=(
-                        "pre-hit ledger evidence cannot be auto-serviced"))
+                # An aligned, pending-free completion needs NO catch-up: the
+                # export command reconstructs its handoff under full proofs
+                # (_bootstrap_missing_post_hit_handoff).  Only a genuinely
+                # unclassifiable shape receives the permanent audit marker —
+                # a transient constructor failure must never poison a clean
+                # completion forever.
+                aligned_clean = bool(
+                    isinstance(dc, dict) and isinstance(sh, dict)
+                    and dc.get("session") == sh.get("session")
+                    and "pending" not in dc and "finality_txn" not in sh
+                    and sh.get("backfilled") is True
+                    and "_ledger_bootstrap" not in st
+                    and "_ledger_recovery_halt" not in st
+                    and legacy_watch is None)
+                if aligned_clean:
+                    log("*** TARGET HIT: aligned completion — continuity "
+                        "preparation deferred to --export-continuity "
+                        "(completion is permanent; no catch-up required)")
+                else:
+                    post = _new_post_hit_catchup(
+                        st, ai, legacy_watch=legacy_watch,
+                        force_audit_reason=(
+                            "pre-hit ledger evidence cannot be auto-serviced"))
             if post is not None:
                 st["_post_hit_catchup"] = post
                 if not _valid_post_hit_catchup(post, st):
@@ -35501,6 +35592,21 @@ def _r4_new_migration_record(st):
 def _r4_commit_migration(st):
     """Atomic final step: settle the clock dip, archive the r4 receipts,
     rebind to /11 and commit the permanent record to both images."""
+    # Final ticket/order/cash reproof IMMEDIATELY before commit: the
+    # INVENTORY_PROVED digest may be stages old.  Re-map every live ticket
+    # into the committed takeover inventory right now — a new, grown,
+    # reversed or foreign ticket refuses the commit (the migration waits
+    # under custody rails); pure reductions remain acceptable.
+    reproof = _r4_live_inventory_proof(st)
+    if reproof is None:
+        log("*** r4 migration: final pre-commit inventory reproof failed — "
+            "commit refused; custody rails keep the account under watch")
+        return False
+    prior_sha = (st.get("_r4_migration") or {}).get("inventory_sha256")
+    if reproof != prior_sha:
+        log("  [r4] pre-commit inventory reproof differs from "
+            "INVENTORY_PROVED (reductions since the proof) — remapped "
+            "cleanly, commit proceeds on the reproved book")
     work = copy.deepcopy(st)
     record = work.get("_r4_migration")
     binding = work.get("_lifecycle_binding")
