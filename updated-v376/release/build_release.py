@@ -6,6 +6,11 @@ Assembles UpdatedV376.zip:
         shadow_seed.json
         shadow_seed_manifest.json
         README.md            exact commands + one-time r4 handoff
+    1/                       pinned-terminal variant: identical to
+    2/                       DEFAULT except the ONE DEFAULT_MT5_PATH
+                             line (see VARIANTS below); generated here
+                             from the DEFAULT bytes with an asserted
+                             single-line diff
     CHANGES.md               change report
     TEST-RESULTS.md          test summary
     MANIFEST.sha256          SHA-256 of every member
@@ -40,6 +45,54 @@ MEMBERS = [
     ("TEST-RESULTS.md", os.path.join(HERE, "TEST-RESULTS.md")),
 ]
 
+# Pinned-terminal variant folders (DEFAULT stays the primary build).
+# Each variant is the DEFAULT bot with EXACTLY ONE line changed: the
+# documented edit-once DEFAULT_MT5_PATH source default.
+_PIN_ANCHOR = b"DEFAULT_MT5_PATH = None\n"
+VARIANTS = [
+    ("1", r"C:\Program Files\MetaTrader 5\terminal64.exe"),
+    ("2", r"C:\Program Files\MetaTrader 5 - 2\terminal64.exe"),
+]
+
+_VARIANT_README = """# Folder {name} — pinned MT5 terminal variant
+
+Identical to `DEFAULT/` except ONE line: the documented edit-once
+source default pins this terminal:
+
+    DEFAULT_MT5_PATH = r"{path}"
+
+`DEFAULT/` (V376 single-terminal auto-discovery) is the primary
+requested build. Use this folder ONLY when this exact terminal must be
+attached deterministically (e.g. two MT5 installations on the machine).
+Every command, resume rule, test result and the one-time r4 handoff are
+exactly those in `DEFAULT/README.md` — run the SAME exact commands from
+this folder instead; the pin is not part of the recipe, so lifecycle
+binding and resume are unchanged.
+
+The pin is validated before any attach or state access: if no regular
+`terminal64.exe` exists at exactly this path, a live start refuses with
+exit code 5 and touches nothing (fail closed). A final command-line
+`--mt5-path "<path>"` still overrides this pinned default.
+"""
+
+
+def _variant_bot(default_bot):
+    if default_bot.count(_PIN_ANCHOR) != 1:
+        raise SystemExit("FATAL: DEFAULT_MT5_PATH anchor not unique")
+    out = {}
+    base = default_bot.decode("utf-8").splitlines()
+    for name, path in VARIANTS:
+        body = default_bot.replace(
+            _PIN_ANCHOR,
+            b'DEFAULT_MT5_PATH = r"' + path.encode("utf-8") + b'"\n')
+        lines = body.decode("utf-8").splitlines()
+        changed = [i for i, (a, b) in enumerate(zip(base, lines)) if a != b]
+        if len(lines) != len(base) or len(changed) != 1:
+            raise SystemExit(f"FATAL: variant {name} diff is not one line")
+        out[name] = body
+    return out
+
+
 TEST_FILES = [
     "fakemt5.py", "orderharness.py", "r4harness.py", "startharness.py",
     "test_cli.py", "test_binding_schema.py", "test_controller_ledger.py",
@@ -61,6 +114,19 @@ def collect():
     members = []
     for arcname, path in MEMBERS:
         members.append((arcname, open(path, "rb").read()))
+    default_bot = open(
+        os.path.join(ROOT, "build", "vol_target_bot_v12.py"), "rb").read()
+    seed = open(os.path.join(ROOT, "build", "shadow_seed.json"), "rb").read()
+    manifest = open(
+        os.path.join(ROOT, "build", "shadow_seed_manifest.json"),
+        "rb").read()
+    variants = _variant_bot(default_bot)
+    for name, path in VARIANTS:
+        members.append((f"{name}/vol_target_bot_v12.py", variants[name]))
+        members.append((f"{name}/shadow_seed.json", seed))
+        members.append((f"{name}/shadow_seed_manifest.json", manifest))
+        members.append((f"{name}/README.md", _VARIANT_README.format(
+            name=name, path=path).encode("utf-8")))
     for name in TEST_FILES:
         path = os.path.join(ROOT, "tests", name)
         members.append((f"maintainer/tests/{name}",

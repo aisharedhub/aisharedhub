@@ -281,6 +281,8 @@ def boot(argv, workdir=None, balance=200000.0):
     b.EXPORT_CONTINUITY = recipe == "export"
     b.RECOVER_SAFETY = recipe == "recover"
     fake = fakemt5.install(b)
+    b._mt5_initialize()  # production order: validate/attach any pin
+                         # before the first account or identity read
     fake.account.login = LOGIN
     fake.account.server = SERVER
     fake.account.balance = balance

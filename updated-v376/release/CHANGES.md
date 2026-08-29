@@ -121,6 +121,28 @@ assertion gap (the bot itself needed no change), closed as follows:
   paused, never catches the missed lease up late, and places the four
   entries at the next session's lease after resume.
 
+## 12. Pinned-terminal variant folders (packaging only)
+
+`DEFAULT/` remains the primary requested build (bare `mt5.initialize()`
+auto-discovery). The archive additionally ships `1/` and `2/`,
+generated at packaging time from the DEFAULT bytes with an asserted
+single-line diff: the documented edit-once `DEFAULT_MT5_PATH` source
+default pins `C:\Program Files\MetaTrader 5\terminal64.exe` (folder 1)
+or `C:\Program Files\MetaTrader 5 - 2\terminal64.exe` (folder 2). The
+pin is operational only — not part of the recipe, binding or resume —
+and is validated before any attach or state access (a missing terminal
+refuses with exit 5, fail closed). The bot itself is unchanged; the
+pin uses the mechanism already in the build.
+
+Verifying the pinned path also surfaced a documented strictness: the
+live identity gate re-validates the configured pin and fails closed
+(exit 5) if a pinned LIVE process somehow reached an account read
+without first attaching through `mt5_init()` — impossible in the
+shipped startup order, where every entry initializes first. The
+offline harnesses now mirror that production attach order
+(`_mt5_initialize()` immediately after installing the fake), which is
+what made the full pinned battery representative.
+
 ## Retained unchanged
 
 The complete V389 safety engine: crash-safe double-image state with

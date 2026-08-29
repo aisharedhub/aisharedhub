@@ -65,6 +65,8 @@ def load_bot(workdir):
     b.LIVE = True
     b.DRY = False
     fake = fakemt5.install(b)
+    b._mt5_initialize()  # production order: validate/attach any pin
+                         # before the first account or identity read
     b.STATE_FILE = os.path.join(workdir, "bot_state_v12.json")
     b.CONTINUITY_FILE = os.path.join(workdir, "shadow_continuity.json")
     # clock pins

@@ -70,6 +70,16 @@ never part of this archive.
 * Clean double extraction: the archive extracted into two fresh
   directories; hash manifest verified and the fast suites re-run from
   each extraction.
+* Pinned-terminal variants (`1/`, `2/`): the packager asserts each
+  variant differs from the DEFAULT bot by EXACTLY the one documented
+  `DEFAULT_MT5_PATH` line. The pinned code path was verified by the
+  complete 16-suite battery run against a variant pinned to a sandbox
+  `terminal64.exe` (identical except the literal path string), plus
+  unit proofs that `mt5.initialize` receives the exact pinned path and
+  that a missing pinned terminal refuses with exit 5 before any attach,
+  send, or state access (both refusal causes exercised). The literal
+  Windows paths themselves can only exist on the target machine; the
+  first live start validates them and fails closed otherwise.
 
 To run the maintainer suites from an extraction, first copy the live
 folder to the layout the harnesses resolve

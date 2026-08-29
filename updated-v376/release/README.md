@@ -24,8 +24,7 @@ V383–V388 takeover machinery is removed.
 
 ## Requirements
 
-Windows, MetaTrader 5 terminal (single installation — V376-style
-auto-discovery; no `--mt5-path`, no BAT wrapper, no watchdog),
+Windows, MetaTrader 5 terminal (no BAT wrapper, no watchdog),
 Python 3.11+:
 
     pip install MetaTrader5 numpy tzdata
@@ -36,6 +35,33 @@ folder must contain `vol_target_bot_v12.py`, `shadow_seed.json` and
 hash-pinned in the bot; a missing or altered file is refused at boot).
 Flags are accepted in any order; unknown, duplicate, contradictory or
 untested values are refused before any MT5 or state access.
+
+## Which terminal does the bot attach to?
+
+This DEFAULT folder is the primary requested build: bare
+`mt5.initialize()` — V376-style single-terminal auto-discovery. The
+MetaTrader5 module finds the terminal itself: a terminal that is
+already running wins; otherwise it launches the registered installed
+terminal. With MORE THAN ONE MT5 installation on the machine the choice
+belongs to the module, not the bot, so it is not guaranteed to be a
+specific installation. The identity gate still refuses a wrong-account
+terminal before any state or order access on a bound folder.
+
+For a deterministic attach, the archive also ships two pinned variant
+folders — identical to DEFAULT except the ONE documented
+`DEFAULT_MT5_PATH` source line:
+
+| Folder | Pinned terminal |
+| --- | --- |
+| `1/` | `C:\Program Files\MetaTrader 5\terminal64.exe` |
+| `2/` | `C:\Program Files\MetaTrader 5 - 2\terminal64.exe` |
+
+Use exactly ONE folder as the live working folder. All commands are
+identical in every folder (the pin is not part of the recipe: binding
+and resume are unchanged). A pinned path that does not exist refuses
+with exit 5 before any attach (fail closed). A final command-line
+`--mt5-path "<path>"` — strictly validated, higher priority than the
+source default — can also pin any folder's start without editing it.
 
 ## Exact commands
 
@@ -119,7 +145,9 @@ build with the supplied state, and the account is
    recovery evidence are the migration's inputs. Copy
    `vol_target_bot_v12.py`, `shadow_seed.json` and
    `shadow_seed_manifest.json` from this DEFAULT
-   folder over the old ones (replace the bot; keep
+   folder (or from `1/` or `2/` if the r4 terminal must be pinned — use
+   the folder that names the terminal the r4 account runs on)
+   over the old ones (replace the bot; keep
    `bot_state_v12.json`, `bot_state_v12.json.bak` and every other file
    in place).
 4. Start the final bot with EXACTLY:
