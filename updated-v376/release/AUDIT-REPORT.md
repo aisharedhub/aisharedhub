@@ -162,4 +162,37 @@ three were verified REAL and are repaired in v3.9.3:
 | The final migration proof accepts cash/history changes ($1,000 balance change; manual XAU deal after LEDGER_REBUILT still committed) | **TRUE.** The v3.9.2 sandwich proved read-stability only. The record now captures the PREPARED-time verified balance and the commit requires the current verified balance to equal it plus the cash of bot-owned deals inside the migration window; both attacks now refuse the commit (suite-proved) and clear once the account is explained again. |
 | Fast challenge passes cannot continue: a target before 20 live sessions becomes permanently AUDIT_REQUIRED (the operator's real P1 took ~13 sessions) | **TRUE — a v3.9.2 regression.** The continuity payload has always carried the complete dated ledger with per-row provenance, proven by both producer and adopter, so a mixed seed/live window travels honestly. The export gates now rest on that dated-ledger proof; a fast pass PREPARES at completion, exports, and is adopted (suite-proved end-to-end). A hit before ANY completed live session still audit-locks loudly. |
 | While migration waits, only hard-loss flattening operates | Accurate, by design, and documented since v3.9.1: strategy servicing requires the rebuilt dated ledger and begins at COMMITTED (normally seconds); the wait services the source's hard-loss custody rails and inherited broker-side protections. |
-| Three migration checks are unconditional no-ops | Hunted by a dedicated adversarial review (three hunters, two refuters per finding) — results recorded below/in CHANGES for whatever survives verification. |
+| Three migration checks are unconditional no-ops | **Partly true, but materially misleading — see below.** |
+
+## The "unconditional no-op checks" claim, verified
+
+A dedicated adversarial hunt (three hunters over the migration,
+cashflow and continuity-commit paths, each finding attacked by two
+independent refuters) examined this claim directly. Result: several
+conditions ARE vacuous, but **in every verified case the protection
+they appear to provide is genuinely enforced by a stronger check that
+runs first**. No claimed protection is absent. The confirmed
+redundancies:
+
+| Site | Why it cannot fire | Where the protection actually lives |
+| --- | --- | --- |
+| `_capture_external_cashflow_guard` — credit re-test in the migration funding qualification | The same tuple element was already required to be 0 earlier in the function | The earlier credit check, plus the BALANCE-code funding-shape test |
+| `_qualified_cashflow_guard4_status` — `policy_sha256` cross-checks | Guard validation already pinned the guard's policy digest to the current in-process policy; both snapshots stamp the same pure digest | Guard validation itself (returns "unknown" before this line on any real change) |
+| `_cashflow_incident_context` — archive-digest re-verification | `_valid_r4_migration` already verified the archive digest and receipt on the same object | `_valid_r4_migration`'s COMMITTED-stage archive block |
+| `_stable_external_cashflow_snapshot` — `policy_sha256` cross-read comparison | Both images are stamped from the same deterministic process constants microseconds apart | The `full` row-image comparison beside it, which does catch a racing history |
+| `_r4_live_inventory_proof` — login/server halves of the identity sandwich | `_verified_account_info` HALTS the process (exit 3) on any identity mismatch before returning | That halt; the sandwich's **balance** comparison is the live part and does fire |
+
+These are deliberately retained rather than deleted: each is cheap
+belt-and-braces that would become load-bearing if the stronger check
+were ever weakened by a refactor, and removing validation from a
+safety-critical path at release time carries more risk than the dead
+code does. They are documented here so no reader mistakes them for
+the protection itself.
+
+Coverage note: 22 of the hunt's 33 agents terminated on a usage limit,
+so a subset of candidates (including all migration-path candidates)
+received no automated refutation. Those were verified by hand against
+the build instead — the authority cross-check and the pre-commit
+binding-hash guard both CAN fire on a tampered on-disk record (they
+compare stored values against freshly recomputed ones across polls),
+so they are live protections, not no-ops.
