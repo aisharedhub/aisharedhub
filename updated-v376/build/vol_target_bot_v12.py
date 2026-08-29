@@ -34248,7 +34248,11 @@ def _service_target_flat_watch(st, start_bal):
                 st["_post_hit_catchup"] = post
                 if not _valid_post_hit_catchup(post, st):
                     st.pop("_post_hit_catchup", None)
-        persisted = _valid_target_hit(hit, st) and save_state(st)
+        # Double save: the permanent completion must land in BOTH recovery
+        # images at commit time (the same discipline every other terminal
+        # commit uses), never rely on incidental later saves.
+        persisted = (_valid_target_hit(hit, st)
+                     and save_state(st) and save_state(st))
     except BaseException:
         reconciled = _reconcile_interrupted_target_hit_save(
             st, hit, expected_watch=old_watch)
