@@ -600,7 +600,8 @@ SHADOW_MANIFEST_SHA256 = "0d82b0085b27187605e70cbee609cb0100a77303d314054a788c30
 SHADOW_MANIFEST_BYTES = 3_452
 CONTINUITY_FILE = os.path.join(_BOT_DIR, "shadow_continuity.json")
 _LEGACY_CONTINUITY_SCHEMA = "shadow_continuity/2"
-CONTINUITY_SCHEMA = "shadow_continuity/3"
+_V389_CONTINUITY_SCHEMA = "shadow_continuity/3"
+CONTINUITY_SCHEMA = "shadow_continuity/4"
 CONTINUITY_EXPORT_NY17_GUARD_S = 5 * 60
 
 S8V_BASE_FRAC = 0.25       # tranche = 0.25 * min(1, S8V_TGT/vol20)
@@ -2044,6 +2045,7 @@ _V386_DIRECT_AUTHORITY_SHA256 = (
 _V389_R4_DIRECT_AUTHORITY_SHA256 = (
     "44b17a2faf6f6ff461a3b4c59faf37f2f0136d06cb2e90c815c93bcd32db2b0c")
 _PREDECESSOR_TAKEOVER_SCHEMA = "predecessor_takeover/1"
+_CONTROLLER_LEDGER_SCHEMA = "controller_ledger/1"
 _V389_CAPITAL_TRANSITION_SCHEMA = "v389_capital_transition/1"
 _TAKEOVER_APPLIED_SCALE_SCHEMA = "takeover_applied_scale/2"
 _TAKEOVER_APPLIED_SCALE_PROOF_SCHEMA = "takeover_applied_scale_grid/2"
@@ -3431,6 +3433,10 @@ def _validate_safety_records_impl(
                 and not (_valid_lifecycle_binding(_safety_binding)
                          or _predecessor_terminal_binding)):
             problems.append("_lifecycle_binding malformed/conflicting")
+        if ("_controller_ledger" in st
+                and not _valid_controller_ledger(
+                    st.get("_controller_ledger"))):
+            problems.append("_controller_ledger malformed/conflicting")
         if ("_predecessor_takeover" in st
                 and not _valid_predecessor_takeover_txn(
                     st.get("_predecessor_takeover"), st)):
@@ -15022,6 +15028,17 @@ def book_realized_vol(st, nas_closes):
              and all(_finite_num(value)
                      and -1.0 <= float(value) <= 10.0
                      for value in hist[-VOL_LOOKBACK:]))
+    if valid and LIVE:
+        # r4 defect-1 repair: a live vol input must be PROVED by the dated
+        # controller ledger (session-dated, provenance-tagged, continuity-
+        # chained) and must equal the derived window exactly.  A bare finite
+        # list is never accepted.
+        windows = _controller_windows(st)
+        valid = bool(
+            windows is not None
+            and len(hist) == VOL_LOOKBACK
+            and all(float(a) == float(b)
+                    for a, b in zip(hist, windows[0])))
     if valid:
         a = np.array(hist[-VOL_LOOKBACK:], float)
         v20 = float(np.std(a))
@@ -18806,6 +18823,286 @@ def _authority_daily_views(snapshots=None, through_ord=None, max_gap=None):
     }, None
 
 
+_CONTROLLER_LEDGER_MAX = 64
+_CONTROLLER_LEDGER_SOURCES = frozenset({
+    "seed", "shadow-backfill", "shadow-live", "live-account", "standdown"})
+_CONTROLLER_LEDGER_FLAGS = frozenset({
+    "seed", "calendar-gap", "account-return-omitted", "standdown",
+    "r4-migration", "applied-L-unverified-legacy", "increase-blocked",
+    "increase-expired", "partial-fill", "clock-hold-merged"})
+_CONTROLLER_ENTRY_KEYS = frozenset({
+    "session", "source", "book_ret", "account_ret", "dip",
+    "applied_L", "requested_L", "sleeves", "flags"})
+
+
+def _controller_ledger_sessions_chain_ok(prev_session, session, entry):
+    """Dated continuity: exact successor session, or a bounded proven gap."""
+    try:
+        if _next_strategy_session_key(prev_session) == session:
+            return True
+        gap_days = (date.fromisoformat(session)
+                    - date.fromisoformat(prev_session)).days
+    except Exception:
+        return False
+    flags = entry.get("flags") if isinstance(entry, dict) else None
+    gap_proven = bool(
+        isinstance(flags, list)
+        and ("calendar-gap" in flags or entry.get("source") == "seed"))
+    return bool(0 < gap_days <= 10 and gap_proven)
+
+
+def _valid_controller_ledger_entry(entry):
+    if (not isinstance(entry, dict)
+            or set(entry) != _CONTROLLER_ENTRY_KEYS
+            or entry.get("source") not in _CONTROLLER_LEDGER_SOURCES):
+        return False
+    session = _continuity_session(entry.get("session"))
+    if session is None or date.fromisoformat(session).weekday() >= 5:
+        return False
+    flags = entry.get("flags")
+    if (not isinstance(flags, list) or len(flags) > 8
+            or any(flag not in _CONTROLLER_LEDGER_FLAGS for flag in flags)
+            or len(set(flags)) != len(flags)):
+        return False
+    book_ret = entry.get("book_ret")
+    account_ret = entry.get("account_ret")
+    dip = entry.get("dip")
+    applied = entry.get("applied_L")
+    requested = entry.get("requested_L")
+    if book_ret is not None and (
+            not _finite_num(book_ret) or not -1.0 <= float(book_ret) <= 10.0):
+        return False
+    if account_ret is not None and (
+            not _finite_num(account_ret)
+            or not -1.0 <= float(account_ret) <= 10.0):
+        return False
+    if dip is not None and (
+            not _finite_num(dip) or not 0.0 <= float(dip) <= 1.0):
+        return False
+    for lev in (applied, requested):
+        if lev is not None and (
+                not _finite_num(lev)
+                or not 0.0 <= float(lev) <= MAX_LEVERAGE):
+            return False
+    sleeves = entry.get("sleeves")
+    if sleeves is not None:
+        if (not isinstance(sleeves, dict)
+                or not set(sleeves) <= set(SHADOW_W)
+                or any(not _finite_num(value)
+                       or not -MAX_LEVERAGE <= float(value) <= MAX_LEVERAGE
+                       for value in sleeves.values())):
+            return False
+    source = entry["source"]
+    if source == "standdown":
+        if book_ret is not None or applied not in (None, 0.0):
+            return False
+    elif source == "live-account":
+        if (book_ret is None or account_ret is None or dip is None
+                or applied is None or float(applied) <= 0.05):
+            return False
+    else:  # seed / shadow-backfill / shadow-live
+        if book_ret is None or applied is not None:
+            return False
+        if account_ret is not None and "account-return-omitted" in flags:
+            return False
+    return True
+
+
+def _valid_controller_ledger(value):
+    """The dated, provenance-tagged controller observation ledger.
+
+    Replaces bare undated return/dip lists as economic authority (the r4
+    defect-1 repair): every observation names its session, provenance,
+    returns, dip and applied exposure, sessions are strictly increasing with
+    proven-continuity chaining, and unknowable account returns are recorded
+    as omitted — never fabricated as zero.
+    """
+    if (not isinstance(value, dict)
+            or set(value) != {"schema", "entries"}
+            or value.get("schema") != _CONTROLLER_LEDGER_SCHEMA):
+        return False
+    entries = value.get("entries")
+    if (not isinstance(entries, list)
+            or not entries
+            or len(entries) > _CONTROLLER_LEDGER_MAX):
+        return False
+    prev_session = None
+    for entry in entries:
+        if not _valid_controller_ledger_entry(entry):
+            return False
+        session = entry["session"]
+        if prev_session is not None and not (
+                prev_session < session
+                and _controller_ledger_sessions_chain_ok(
+                    prev_session, session, entry)):
+            return False
+        prev_session = session
+    return True
+
+
+def _controller_windows(st):
+    """Derive the (returns20, dips20) vol/dip authority from the dated ledger.
+
+    Returns None when the ledger cannot PROVE a 20-observation window (short,
+    malformed, or missing) — the caller latches no-new-risk rather than
+    accepting an undated list.
+    """
+    ledger = st.get("_controller_ledger") if isinstance(st, dict) else None
+    if not _valid_controller_ledger(ledger):
+        return None
+    returns = []
+    dips = []
+    for entry in reversed(ledger["entries"]):
+        book_ret = entry.get("book_ret")
+        if book_ret is None:
+            continue          # standdown sessions hold the chain, not values
+        returns.append(float(book_ret))
+        dip = entry.get("dip")
+        dips.append(float(dip) if dip is not None
+                    else float(-min(float(book_ret), 0.0)))
+        if len(returns) >= VOL_LOOKBACK:
+            break
+    if len(returns) < VOL_LOOKBACK:
+        return None
+    returns.reverse()
+    dips.reverse()
+    return returns, dips
+
+
+def _sync_controller_windows(st):
+    """Rewrite the legacy 20-value windows from the dated ledger."""
+    windows = _controller_windows(st)
+    if windows is None:
+        return False
+    returns, dips = windows
+    st["book_returns"] = [float(value) for value in returns]
+    st["dip_hist"] = [float(value) for value in dips]
+    st["max_dip20"] = max(max(dips, default=0.0), 0.004)
+    return True
+
+
+def _controller_ledger_append(st, entry):
+    """Append one dated observation; trims and re-syncs the legacy windows."""
+    if not isinstance(st, dict) or not _valid_controller_ledger_entry(entry):
+        return False
+    ledger = st.get("_controller_ledger")
+    if ledger is None:
+        ledger = {"schema": _CONTROLLER_LEDGER_SCHEMA, "entries": []}
+    elif not _valid_controller_ledger(ledger):
+        return False
+    entries = ledger["entries"] + [entry]
+    ledger = {"schema": _CONTROLLER_LEDGER_SCHEMA,
+              "entries": entries[-_CONTROLLER_LEDGER_MAX:]}
+    if not _valid_controller_ledger(ledger):
+        return False
+    st["_controller_ledger"] = ledger
+    return _sync_controller_windows(st)
+
+
+def _controller_ledger_bootstrap_from_seed(st, authority):
+    """Fresh start: date the initial window from the pinned seed tail."""
+    if not isinstance(st, dict) or not isinstance(authority, dict):
+        return False
+    dates = authority.get("dates")
+    seed_returns = authority.get("book_returns")
+    if (not isinstance(dates, list) or not isinstance(seed_returns, list)
+            or len(dates) != len(seed_returns)
+            or len(dates) < VOL_LOOKBACK):
+        return False
+    entries = []
+    for session, value in zip(dates[-VOL_LOOKBACK:],
+                              seed_returns[-VOL_LOOKBACK:]):
+        entries.append({
+            "session": str(session), "source": "seed",
+            "book_ret": float(value), "account_ret": None,
+            "dip": None, "applied_L": None, "requested_L": None,
+            "sleeves": None, "flags": ["seed"],
+        })
+    ledger = {"schema": _CONTROLLER_LEDGER_SCHEMA, "entries": entries}
+    if not _valid_controller_ledger(ledger):
+        return False
+    st["_controller_ledger"] = ledger
+    return _sync_controller_windows(st)
+
+
+def _controller_ledger_frontier_session(st):
+    ledger = st.get("_controller_ledger") if isinstance(st, dict) else None
+    if not _valid_controller_ledger(ledger):
+        return None
+    return ledger["entries"][-1]["session"]
+
+
+def _controller_ledger_absorb_backfill(st, authority, gap_records):
+    """Extend/refresh the dated ledger from a proved backfill replay.
+
+    A missing ledger is bootstrapped from the pinned seed tail; every proved
+    post-seed gap session past the ledger frontier is appended with
+    shadow-backfill provenance.  Success re-proves the economic authority.
+    """
+    if not isinstance(st, dict):
+        return False
+    ledger = st.get("_controller_ledger")
+    if ledger is not None and not _valid_controller_ledger(ledger):
+        st.pop("_controller_ledger", None)
+        ledger = None
+    if ledger is None and not _controller_ledger_bootstrap_from_seed(
+            st, authority):
+        return False
+    frontier = _controller_ledger_frontier_session(st)
+    if frontier is None:
+        return False
+    for ordinal, value in sorted(gap_records or []):
+        try:
+            session = date.fromordinal(int(ordinal)).isoformat()
+        except Exception:
+            return False
+        if session <= frontier:
+            continue
+        entry = {
+            "session": session, "source": "shadow-backfill",
+            "book_ret": float(value), "account_ret": None, "dip": None,
+            "applied_L": None, "requested_L": None, "sleeves": None,
+            "flags": [],
+        }
+        try:
+            exact_next = _next_strategy_session_key(frontier) == session
+        except Exception:
+            exact_next = False
+        if not exact_next:
+            entry["flags"] = ["calendar-gap"]
+        if not _controller_ledger_append(st, entry):
+            return False
+        frontier = session
+    if not _sync_controller_windows(st):
+        return False
+    _ECONOMIC_INPUT_INVALID[0] = False
+    return True
+
+
+def _controller_ledger_append_roll(st, entry):
+    """Append one live roll observation to the dated ledger.
+
+    A broken exact-successor chain retries once with the proven-gap flag
+    (weekends/holidays).  An unappendable ledger (gap beyond the bounded
+    proof) is quarantined loudly: dated economic authority is withdrawn and
+    the next shadow rebuild/backfill must re-prove it before any new risk.
+    """
+    if _controller_ledger_append(st, entry):
+        return True
+    retry = copy.deepcopy(entry)
+    flags = [flag for flag in retry.get("flags", [])
+             if flag != "calendar-gap"]
+    retry["flags"] = flags + ["calendar-gap"]
+    if _controller_ledger_append(st, retry):
+        return True
+    st.pop("_controller_ledger", None)
+    _ECONOMIC_INPUT_INVALID[0] = True
+    log("*** controller ledger could not chain the booked session — dated "
+        "economic authority QUARANTINED; no new risk until a shadow "
+        "rebuild/backfill re-proves it")
+    return False
+
+
 def _install_pinned_vol_history(st):
     """Prove the economic authority, then normalize the live 20-day window.
 
@@ -18821,28 +19118,45 @@ def _install_pinned_vol_history(st):
     if authority is None:
         _ECONOMIC_INPUT_INVALID[0] = True
         return False
-    history = st.get("book_returns") if isinstance(st, dict) else None
-    valid = (isinstance(history, list)
-             and len(history) >= VOL_LOOKBACK
-             and all(_finite_num(value)
-                     and -1.0 <= float(value) <= 10.0
-                     for value in history))
-    if valid:
-        normalized = [float(value) for value in history[-VOL_LOOKBACK:]]
-    else:
-        seed_history = authority.get("book_returns")
-        if (not isinstance(seed_history, list)
-                or len(seed_history) < VOL_LOOKBACK):
+    if not isinstance(st, dict):
+        _ECONOMIC_INPUT_INVALID[0] = True
+        return False
+    ledger = st.get("_controller_ledger")
+    if ledger is not None:
+        # r4 defect-1 repair: the DATED ledger is the sole economic input.
+        # A malformed ledger is never silently repaired or replaced — the
+        # process stays no-new-risk while rails/closes continue.
+        if not _valid_controller_ledger(ledger):
             _ECONOMIC_INPUT_INVALID[0] = True
+            log("*** controller ledger malformed — NO NEW RISK; restore the "
+                "recovery image or start a fresh lifecycle")
             return False
-        normalized = [float(value)
-                      for value in seed_history[-VOL_LOOKBACK:]]
-        # Sticky for the whole process boot.  Seed repair is safe for normal
-        # close-only/trading operation, but an exporter must not present that
-        # reconstructed window as if it contained the producer account's
-        # realized live returns.
-        _VOL_HISTORY_REPAIRED_FROM_SEED[0] = True
-    st["book_returns"] = normalized
+        if not _sync_controller_windows(st):
+            _ECONOMIC_INPUT_INVALID[0] = True
+            log("*** controller ledger cannot prove a dated 20-observation "
+                "window — NO NEW RISK")
+            return False
+        _ECONOMIC_INPUT_INVALID[0] = False
+        return True
+    history = st.get("book_returns")
+    if isinstance(history, list) and history:
+        # An undated legacy window (any finite list) is exactly the r4
+        # defect-1 acceptance hole.  It is never vol authority here: the
+        # one-time r4 migration builds the dated ledger from evidence, and
+        # every other legacy state must start fresh.
+        _ECONOMIC_INPUT_INVALID[0] = True
+        log("*** undated legacy return window is NOT economic authority — "
+            "NO NEW RISK (the one-time r4 migration or a fresh lifecycle "
+            "is required)")
+        return False
+    if not _controller_ledger_bootstrap_from_seed(st, authority):
+        _ECONOMIC_INPUT_INVALID[0] = True
+        return False
+    # Sticky for the whole process boot.  Seed repair is safe for normal
+    # close-only/trading operation, but an exporter must not present that
+    # reconstructed window as if it contained the producer account's
+    # realized live returns.
+    _VOL_HISTORY_REPAIRED_FROM_SEED[0] = True
     _ECONOMIC_INPUT_INVALID[0] = False
     return True
 
@@ -19064,6 +19378,17 @@ def _continuity_payload(st, _skip_txn_check=False):
             or not math.isclose(float(max_dip20), expected_max_dip20,
                                 rel_tol=0.0, abs_tol=1e-12)):
         raise ValueError("continuity producer max-dip frontier incoherent")
+    ledger = st.get("_controller_ledger")
+    windows = _controller_windows(st)
+    if (not _valid_controller_ledger(ledger) or windows is None
+            or [float(value) for value in windows[0]] !=
+                [float(value) for value in book_returns]
+            or [float(value) for value in windows[1]] !=
+                [float(value) for value in dip_hist]):
+        # Naked undated windows are never exported (r4 defect-1 repair):
+        # the dated ledger must prove exactly the windows being carried.
+        raise ValueError("continuity producer dated controller ledger "
+                         "missing/inconsistent")
     payload = {
         "schema": CONTINUITY_SCHEMA,
         "producer_stage": producer_stage,
@@ -19074,6 +19399,7 @@ def _continuity_payload(st, _skip_txn_check=False):
         "config_sha256": _continuity_config_id(),
         "shadow": sh,
         "s8v": _continuity_s8v_relative(st, sh["session"]),
+        "controller_ledger": copy.deepcopy(ledger),
         "book_returns": [float(value) for value in book_returns],
         "dip_hist": [float(value) for value in dip_hist],
         "dip_live_n": dip_live_n,
@@ -20400,6 +20726,7 @@ def _load_continuity(path=None):
             "schema", "producer_stage", "producer_build", "checkpoint_sha256",
             "direct_authority_sha256",
             "manifest_sha256", "config_sha256", "shadow", "s8v",
+            "controller_ledger",
             "book_returns", "dip_hist", "dip_live_n", "max_dip20",
         }
         if not isinstance(p, dict):
@@ -20407,26 +20734,13 @@ def _load_continuity(path=None):
         provenance = (
             p.get("schema"), p.get("producer_build"),
             p.get("direct_authority_sha256"))
+        # Only this build's dated-ledger artifacts are accepted.  Every
+        # predecessor continuity schema carried naked undated return/dip
+        # lists, which are no longer importable economic authority (build
+        # order section 17: no stale naked lists in continuity).
         accepted_provenance = {
             (CONTINUITY_SCHEMA, BOT_BUILD,
              DIRECT_RECIPE_AUTHORITY_SHA256),
-            (CONTINUITY_SCHEMA, "v3.8.4-flexible-flat-binding",
-             _V384_DIRECT_AUTHORITY_SHA256),
-            (CONTINUITY_SCHEMA, "v3.8.3-unified-entry-recovery",
-             _V383_DIRECT_AUTHORITY_SHA256),
-            (CONTINUITY_SCHEMA, "v3.8.5-full-virtual-safe-reopen",
-             _V385_DIRECT_AUTHORITY_SHA256),
-            # A legacy V380 envelope can be recreated by either supported
-            # settled-receipt lineage; its authority must still name that
-            # exact recreating lineage rather than cross-pairing by set.
-            (_LEGACY_CONTINUITY_SCHEMA, "v3.8.0-direct",
-             DIRECT_RECIPE_AUTHORITY_SHA256),
-            (_LEGACY_CONTINUITY_SCHEMA, "v3.8.0-direct",
-             _V384_DIRECT_AUTHORITY_SHA256),
-            (_LEGACY_CONTINUITY_SCHEMA, "v3.8.0-direct",
-             _V383_DIRECT_AUTHORITY_SHA256),
-            (_LEGACY_CONTINUITY_SCHEMA, "v3.8.0-direct",
-             _V385_DIRECT_AUTHORITY_SHA256),
         }
         if (not (set(p) == base_payload_keys
                  and provenance in accepted_provenance)
@@ -20533,6 +20847,18 @@ def _load_continuity(path=None):
                                     expected_max_dip20,
                                     rel_tol=0.0, abs_tol=1e-12)):
             raise ValueError("continuity dip frontier invalid")
+        ledger = p.get("controller_ledger")
+        if not _valid_controller_ledger(ledger):
+            raise ValueError("continuity dated controller ledger invalid")
+        probe = {"_controller_ledger": ledger}
+        windows = _controller_windows(probe)
+        if (windows is None
+                or [float(x) for x in windows[0]] !=
+                    [float(x) for x in book_returns]
+                or [float(x) for x in windows[1]] !=
+                    [float(x) for x in dip_hist]):
+            raise ValueError("continuity windows are not proved by the "
+                             "dated controller ledger")
         return copy.deepcopy(p)
     except Exception as exc:
         log(f"*** CONTINUITY ARTIFACT FAULT ({type(exc).__name__}: {exc}) — "
@@ -20569,6 +20895,7 @@ def _import_continuity_if_fresh(st):
     for key in ("shadow", "s8v", "book_returns", "dip_hist",
                 "dip_live_n", "max_dip20"):
         st[key] = copy.deepcopy(p[key])
+    st["_controller_ledger"] = copy.deepcopy(p["controller_ledger"])
     _BOOT_CONTINUITY_PRODUCER_STAGE[0] = p["producer_stage"]
     _BOOT_IMPORTED_CONTINUITY_SHA256[0] = artifact_sha256
     log(f"[continuity] imported sanitized economic frontier through "
@@ -25398,6 +25725,30 @@ def roll_day_state(st, start_bal, continuity_step=None,
             st["dip_live_n"] = int(st.get("dip_live_n", 0)) + 1
             st["max_dip20"] = max(max(st["dip_hist"], default=0.0), 0.004)
             st["_last_book_ret"] = float(book_ret)   # v3.3.0: post-loss factor input
+            _controller_ledger_append_roll(st, {
+                "session": str(prev_sess), "source": "live-account",
+                "book_ret": float(book_ret),
+                "account_ret": float(sizing_eq_ret),
+                "dip": float(max(sess_dip, cc_dip)),
+                "applied_L": float(L_applied),
+                "requested_L": (float(pending["requested_L"])
+                                if _finite_num(pending.get("requested_L"))
+                                else None),
+                "sleeves": (copy.deepcopy(pending["sleeves"])
+                            if isinstance(pending.get("sleeves"), dict)
+                            else None),
+                "flags": [],
+            })
+        else:
+            _controller_ledger_append_roll(st, {
+                "session": str(prev_sess), "source": "standdown",
+                "book_ret": None,
+                "account_ret": float(sizing_eq_ret),
+                "dip": float(-min(float(pending["sess_dip"]), 0.0)),
+                "applied_L": 0.0, "requested_L": None, "sleeves": None,
+                "flags": (["standdown"] if pending.get("standdown")
+                          else []),
+            })
         st["trading_days"] = st.get("trading_days", 0) + 1
         st["_sess_dip"] = 0.0        # new session: reset the intraday accumulator
         # v3.3.2 (review F1): the funded reference sim books a stand-down day
@@ -26994,6 +27345,7 @@ def shadow_backfill(st, sh, max_sessions=40):
             _orb_status_by_ord[int(target_ord)] = "EXACT"
     _orb_fb = [0]                                # v3.5.1: wobble-fallback count
     seed_used = 0; seed_date = None
+    _ledger_gap_records = []
     _BF[0] = True
     try:
         pos = dict(XAUM=0.0, XAUB=0.0, BTC=0.0, S8V=0.0)
@@ -27083,6 +27435,10 @@ def shadow_backfill(st, sh, max_sessions=40):
                     f"{date.fromordinal(int(replay_ords[i])).isoformat()}")
                 return False
             rets["ORB"] = od
+            _ledger_gap_records.append((
+                int(replay_ords[i]),
+                float(sum(SHADOW_W[k] * float(v)
+                          for k, v in rets.items() if k in SHADOW_W))))
             shadow_update(sh, rets, bf_ord=int(replay_ords[i]),
                           gate_start_ord=gate_start_ord)
             comp = replay_nc[:i+1]               # completed closes at roll i
@@ -27118,6 +27474,11 @@ def shadow_backfill(st, sh, max_sessions=40):
     sh["orb_day"] = int(_lastb)
     sh["session"] = _cursor_session
     sh.pop("_n2_pend", None)
+    if seed is not None and not _controller_ledger_absorb_backfill(
+            st, seed, _ledger_gap_records):
+        log("*** [shadow] dated controller ledger could not absorb the "
+            "proved backfill — FAIL-CLOSED before publication")
+        return False
     streak = 0
     for x in reversed(sh.get("ret_hist", [])):
         if x < 0: streak += 1

@@ -1,0 +1,6 @@
+2026-08-29 00:10:13 NY | *** controller ledger could not chain the booked session — dated economic authority QUARANTINED; no new risk until a shadow rebuild/backfill re-proves it
+2026-08-29 00:10:13 NY | *** live book-return authority became short/corrupt — NO NEW RISK until an inspected restart repairs it from the pinned full seed
+2026-08-29 00:11:57 NY | *** controller ledger could not chain the booked session — dated economic authority QUARANTINED; no new risk until a shadow rebuild/backfill re-proves it
+2026-08-29 00:11:57 NY | *** live book-return authority became short/corrupt — NO NEW RISK until an inspected restart repairs it from the pinned full seed
+2026-08-29 00:11:57 NY | *** undated legacy return window is NOT economic authority — NO NEW RISK (the one-time r4 migration or a fresh lifecycle is required)
+2026-08-29 00:11:57 NY | *** controller ledger malformed — NO NEW RISK; restore the recovery image or start a fresh lifecycle
