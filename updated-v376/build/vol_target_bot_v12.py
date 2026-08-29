@@ -869,7 +869,7 @@ RESUME_PAUSED_CMD = RELEASE_RECIPE_ID == "resume"
 FLATTEN_AND_STOP = RELEASE_RECIPE_ID == "flatten-stop"
 ASSUME_YES = bool((_DIRECT_PROFILE or {}).get("assume_yes"))
 V376_P1_PATH_PINNED = False
-BOT_BUILD = "v3.9.3-updated-v376"
+BOT_BUILD = "v3.9.4-updated-v376"
 
 if MODE not in MODES:
     print(f"--mode must be one of {list(MODES)}"); sys.exit(1)
@@ -35715,17 +35715,32 @@ def _r4_commit_migration(st):
     wall_now = globals().get("_TEST_WALL_TS")
     if wall_now is None:
         wall_now = time.time()
-    span_start = float(record0.get("created_at", 1.0)) - 60.0
+    # The window starts at the PREPARED balance capture itself: deals that
+    # settled BEFORE it are already inside start_balance_cents and must not
+    # be counted twice.  Both bounds are encoded into the BROKER's server
+    # epoch exactly as every other history query in this build does — a raw
+    # UTC window would be offset by the server's time zone and sweep the
+    # wrong rows.
+    policy = _external_cashflow_type_policy()
+    query_start = _mt5_query_datetime(datetime.fromtimestamp(
+        max(float(record0.get("created_at", 1.0)), 1.0), tz=timezone.utc))
+    query_end = _mt5_query_datetime(datetime.fromtimestamp(
+        float(wall_now) + 60.0, tz=timezone.utc))
+    if policy is None or query_start is None or query_end is None:
+        log("*** r4 migration: deal-type policy or broker history window "
+            "unavailable — commit refused this poll")
+        return False
     try:
-        span_rows = mt5.history_deals_get(
-            datetime.fromtimestamp(max(span_start, 1.0), tz=timezone.utc),
-            datetime.fromtimestamp(float(wall_now) + 60.0, tz=timezone.utc))
+        span_rows = mt5.history_deals_get(query_start, query_end)
     except Exception:
         span_rows = None
     if span_rows is None:
         log("*** r4 migration: migration-window deal history unreadable — "
             "commit refused this poll")
         return False
+    codes = policy["codes"]
+    external_codes = set(policy["external"])   # already type CODES
+    trade_codes = {codes["BUY"], codes["SELL"]}
     owned_magics = set(MAGIC.values())
     owned_ids = {row.get("identifier")
                  for row in (st.get("_predecessor_takeover") or {})
@@ -35734,11 +35749,23 @@ def _r4_commit_migration(st):
     for row in span_rows:
         row_magic = getattr(row, "magic", None)
         row_position = getattr(row, "position_id", None)
-        if row_magic not in owned_magics and row_position not in owned_ids:
-            log(f"*** r4 migration: foreign/manual/balance deal "
-                f"{getattr(row, 'ticket', '?')} inside the migration window "
-                "— commit refused (cash/history reproof)")
-            return False
+        owned = (row_magic in owned_magics or row_position in owned_ids)
+        if not owned:
+            row_type = getattr(row, "type", None)
+            if not isinstance(row_type, int) or isinstance(row_type, bool):
+                log("*** r4 migration: unclassifiable deal "
+                    f"{getattr(row, 'ticket', '?')} inside the migration "
+                    "window — commit refused")
+                return False
+            if row_type in trade_codes or row_type in external_codes:
+                # A manual/foreign trade, or external cash (deposit,
+                # withdrawal, credit, correction) — never migrate over it.
+                log(f"*** r4 migration: foreign trade or external cash deal "
+                    f"{getattr(row, 'ticket', '?')} inside the migration "
+                    "window — commit refused (cash/history reproof)")
+                return False
+            # Broker-posted fee/interest/dividend/tax rows are ordinary
+            # account economics: their cash counts, they never block.
         for field in ("profit", "commission", "swap", "fee"):
             value = getattr(row, field, 0.0)
             if _finite_num(value):

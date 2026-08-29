@@ -336,6 +336,46 @@ fake9e.deals.remove(manual)
 ok(b9e._advance_r4_migration(st9e) == "committed",
    "the manual-deal refusal clears once the window history is pure again")
 
+# ---- a broker-posted swap/interest row must NOT block the commit ----
+# (OANDA posts these at rollover — exactly when an operator may hand off.
+#  They are ordinary account economics: their cash counts, they never
+#  refuse.  A permanent refusal here would brick the handoff.)
+b9f, fake9f, st9f, _ = r4harness.boot()
+for _ in range(3):
+    b9f._advance_r4_migration(st9f)
+assert st9f["_r4_migration"]["stage"] == "LEDGER_REBUILT"
+swap_row = fakemt5._Obj(
+    ticket=777002, order=0, position_id=0, magic=0,
+    symbol="", volume=0.0, type=fake9f.DEAL_TYPE_INTEREST, entry=0,
+    profit=0.0, commission=0.0, swap=-3.25, fee=0.0,
+    time=r4harness.SCENARIO_WALL + 5.0, comment="swap")
+fake9f.deals.append(swap_row)
+fake9f.account.balance = round(fake9f.account.balance - 3.25, 2)
+fake9f.account.equity = round(fake9f.account.equity - 3.25, 2)
+out9f = b9f._advance_r4_migration(st9f)
+ok(out9f == "committed",
+   f"a broker swap/interest row inside the window is counted, never "
+   f"blocking ({out9f})")
+
+# ...but an EXTERNAL cash row (deposit/withdrawal) still refuses, even
+# when the balance moves consistently with it
+b9g, fake9g, st9g, _ = r4harness.boot()
+for _ in range(3):
+    b9g._advance_r4_migration(st9g)
+deposit = fakemt5._Obj(
+    ticket=777003, order=0, position_id=0, magic=0,
+    symbol="", volume=0.0, type=fake9g.DEAL_TYPE_BALANCE, entry=0,
+    profit=500.0, commission=0.0, swap=0.0, fee=0.0,
+    time=r4harness.SCENARIO_WALL + 5.0, comment="deposit")
+fake9g.deals.append(deposit)
+fake9g.account.balance = round(fake9g.account.balance + 500.00, 2)
+fake9g.account.equity = round(fake9g.account.equity + 500.00, 2)
+out9g = b9g._advance_r4_migration(st9g)
+ok(out9g == "wait"
+   and st9g["_r4_migration"]["stage"] == "LEDGER_REBUILT",
+   f"an external cash row (deposit) refuses the commit even when the "
+   f"balance agrees with it ({out9g})")
+
 # a MID-TAKEOVER source is held fail-closed, never migrated.  (The real
 # supplied state is COMMITTED/COMMITTED/PROVED with the ledger bridge
 # present; this SYNTHESIZED variant flips only those markers to prove
