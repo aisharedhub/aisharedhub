@@ -97,3 +97,27 @@ synthesized states exist only to prove the refusal).
 
 No validator was weakened, no stage was skipped, no bridge or anchor
 was fabricated, and omitted account returns remain recorded as omitted.
+
+---
+
+# Round 2 — adversarial re-test of v3.9.0 (claims substantially TRUE)
+
+A second independent report challenged the v3.9.0 certification. Unlike
+round 1, verification CONFIRMED its critical findings; v3.9.1 repairs
+them. Verdict by claim:
+
+| Claim | Verdict |
+| --- | --- |
+| P1 cannot produce the continuity file required by P2 gated; the advertised test expects exit 8, verifies no file, never launches P2 | **TRUE.** The suite asserted only the fail-closed refusal. Root causes: the repaired-from-seed latch blocked the export baseline for the whole producing process even after the window became fully live, and the completion path then permanently audit-locked the clean folder. Repaired; the suite now drives the REAL chain to a written, adopted artifact. |
+| …including startup identity ordering | **TRUE.** `EXPECTED_LOGIN/SERVER` are bound only after MT5 attach, but the continuity-transaction validator used them at state-load time — any completed folder with a PREPARED transaction reloaded custody-only. Repaired (image-self-consistent validation pre-bind; live identity gate unchanged). |
+| …and rejection of legitimate leading BTC missing-history values | **TRUE.** BTC's ~2,500 legitimate pre-listing sessions failed the all-finite through-vector digest; the terminal fold could never be proven. Repaired (counted leading-missing prefix + exact finite suffix; interior gaps still refuse). |
+| The migration proves inventory only once; a ticket added after INVENTORY_PROVED still commits | **TRUE.** Reproduced exactly. Repaired: a final full inventory re-map runs immediately before commit; the attack now refuses the commit and the migration waits under custody rails. Proven by a permanent suite case. |
+| During the migration wait, strategy reductions / ORB timed exits / target handling are not serviced, contrary to the instructions | **TRUE as to the instructions** — the README overpromised ("rails, reductions and closes are live from the first poll"). The behavior itself is the safe design: strategy servicing requires the rebuilt dated ledger, so the wait services hard-loss custody rails (account-wide flatten on floor/daily/breaker breach) plus inherited broker-side protections, and full servicing begins at COMMITTED (normally seconds). The README now states exactly this. |
+| `--yes` also bypasses confirmation on virgin starts | **TRUE.** V376-parity behavior; the README implied a resume-only scope. Documentation corrected (behavior unchanged). |
+| Startup re-executes into another Python process | **TRUE.** The deliberate isolated re-exec (`-E -P -B`); now documented. |
+| The seed ends August 7 with a post-seed bridge | **TRUE and by design.** The pinned seed's last session is 2026-08-07; the gap to the live frontier is reconstructed causally at bind from broker D1 history (and, for a P2 adoption, from the continuity frontier). |
+| The 785/785 result missed these defects | **TRUE.** The checks were genuine but the continuity suite certified a refusal path as if it were the feature. The v3.9.1 battery result in TEST-RESULTS.md supersedes it, including the end-to-end continuity chain and the reproof attack. |
+
+Verification and repair were performed offline on temporary copies with
+the inert fake MT5; the supplied state and archives remained read-only;
+zero broker sends everywhere.

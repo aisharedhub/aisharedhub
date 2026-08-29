@@ -206,6 +206,32 @@ st8["_predecessor_takeover"]["source_balance_cents"] += 1
 ok(not b8._r4_migration_source_shape_ok(st8),
    "tampered takeover receipt refuses the migration")
 
+# a ticket appearing AFTER the inventory proof refuses the final commit:
+# the migration re-maps every live ticket immediately before committing
+b8b, fake8b, st8b, _ = r4harness.boot()
+b8b._advance_r4_migration(st8b)          # PREPARED
+b8b._advance_r4_migration(st8b)          # INVENTORY_PROVED
+b8b._advance_r4_migration(st8b)          # LEDGER_REBUILT
+assert st8b["_r4_migration"]["stage"] == "LEDGER_REBUILT"
+evil = fakemt5._Obj(
+    ticket=777777, identifier=777777, magic=b8b.MAGIC["BTC"],
+    symbol="BTCUSD.sim", volume=0.10, type=fake8b.POSITION_TYPE_BUY,
+    price_open=64000.0, price_current=64000.0, sl=0.0, tp=0.0,
+    profit=0.0, swap=0.0, time=0, comment="")
+fake8b.positions.append(evil)
+out8b = b8b._advance_r4_migration(st8b)
+ok(out8b == "wait"
+   and st8b["_r4_migration"]["stage"] == "LEDGER_REBUILT",
+   f"a 5th apparently-bot-owned ticket after INVENTORY_PROVED refuses "
+   f"the commit ({out8b})")
+ok(len(fake8b.sent) == 0, "the pre-commit reproof refusal sends nothing")
+fake8b.positions.remove(evil)
+b8b._ACCOUNT_CONFLICT[0] = False
+out8c = b8b._advance_r4_migration(st8b)
+ok(out8c == "committed"
+   and st8b["_r4_migration"]["stage"] == "COMMITTED",
+   "the commit completes once the live book maps purely again")
+
 # a MID-TAKEOVER source is held fail-closed, never migrated.  (The real
 # supplied state is COMMITTED/COMMITTED/PROVED with the ledger bridge
 # present; this SYNTHESIZED variant flips only those markers to prove

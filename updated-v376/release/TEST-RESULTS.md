@@ -10,7 +10,7 @@ scripts). The supplied live state files were used strictly read-only.
 
 Every suite below ran green, in one sequential battery, against the
 exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
-`8b680bf9734901063233ae1d623b4b6364f46da80e38258248295fe6fe49201d`).
+`5138e0fea71bf11ed49ba2ad3afbc8ac34510384f4f497fb760d60c3d8b350d1`).
 
 | Suite | Result |
 | --- | --- |
@@ -18,7 +18,7 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 | test_binding_schema | 23 pass, 0 fail |
 | test_controller_ledger | 40 pass, 0 fail |
 | test_applied_exposure | 20 pass, 0 fail |
-| test_r4_migration | 72 pass, 0 fail |
+| test_r4_migration | 75 pass, 0 fail |
 | test_operator_commands | 70 pass, 0 fail |
 | test_console_status | 19 pass, 0 fail |
 | test_gate_history | 45 pass, 0 fail |
@@ -29,8 +29,8 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 | test_orb_matrix | 18 pass, 0 fail |
 | test_target_completion | 14 pass, 0 fail |
 | test_interrupt | 8 pass, 0 fail |
-| test_continuity_chain | 10 pass, 0 fail |
-| **Total** | **785 checks, 0 failures** |
+| test_continuity_chain | 23 pass, 0 fail |
+| **Total** | **801 checks, 0 failures** |
 | run_mutations | **15/15 mutants KILLED, 0 survived** |
 
 ## Suites (maintainer/tests/)
@@ -41,7 +41,7 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 | test_binding_schema | direct_lifecycle_binding/11 polarity: strict sites require /11; custody/safety semantics accept the active pair; /10 only as the r4 migration source. |
 | test_controller_ledger | The dated controller ledger: entry/provenance validation, strict session chaining, bounded proven gaps, quarantine, window derivation, refusal of undated legacy lists, omitted-return honesty. |
 | test_applied_exposure | Broker-proved applied leverage: matched inventory proves the request; partial books prove the implied value; pending intents/unknown inventory/unpriceable exposure defer; day_roll_txn/2 audit fields. |
-| test_r4_migration | The one-time r4 takeover against the EXACT supplied state and live positions: full pass, interruption + native resume at every stage, foreign/grown/reduced ticket matrix, tamper refusal, permanent completion, zero sends. |
+| test_r4_migration | The one-time r4 takeover against the EXACT supplied state and live positions: full pass, interruption + native resume at every stage, foreign/grown/reduced ticket matrix, tamper refusal, the FINAL pre-commit inventory reproof (a 5th apparently-bot-owned ticket added after INVENTORY_PROVED refuses the commit; removal commits cleanly), mid-takeover and bridge-absent sources held fail-closed, permanent completion, zero sends. |
 | test_operator_commands | --diagnose (read-only), durable pause/resume (proof-gated), --flatten-and-stop (managed close-everything, resumable folder), request-file atomicity, restart durability. |
 | test_console_status | The section-19 console: exact dollar distances on the committed r4 evidence, requested-vs-applied leverage, honest UNKNOWN/UNPROVED placeholders, exact-blocker naming. |
 | test_gate_history | Full-history causal gate 1:1: the REAL _check_arm vs an independent causal walk across ALL 5,220 eligible launches (zero mismatches); census 5,220/5,181/279; July 24 crossing / July 31 bit-exact low / Aug 4 arm / Aug 5 first-eligible; a cold launch-seeded gate never crosses; IEEE-754 boundary probes; P2 cap force-release; rearm-exactly-once; and the exact 269/279 = 96.4157706093% reproduction from the V376 oracle arrays. |
@@ -52,7 +52,7 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 | test_orb_matrix | The real ORB engine: exact six-bar range; first-breakout entry with the stop on the far range side and TP at exactly entry+5R; verified SL/TP protection under the 5x inner cap; one event per day; EOD exact-ticket flat; missing/duplicate bars never trade; ~30s entry-window expiry; the min(20 ticks, 0.15R) drift cap; range-too-small stand-down. |
 | test_target_completion | A genuine rally through $210k: durable watch → account-wide exact-ticket closes realize the profit → double flat/cash proof → permanent target_hit/2 in BOTH recovery images → restart permanently complete; a below-line realization NEVER passes falsely. |
 | test_interrupt | Ctrl+C managed flatten: exact-ticket closes, the keyboard halt clears only after the 60s account-flat quiet proof, exposure is retained (never abandoned) under a silent broker. |
-| test_continuity_chain | P1-immediate campaign to +10% → hash-enveloped continuity export carrying the dated ledger → adopted by a fresh p2-fresh gated folder with the continuity identity sealed and rearm consumed once. |
+| test_continuity_chain | The REAL section-17 chain end to end: P1-immediate campaign to +10% → ALIGNED completion carrying a PREPARED continuity transaction (never audit-poisoned) → --export-continuity performs the terminal fold and WRITES the hash-enveloped shadow_continuity.json (exit 0, zero sends) → re-export non-destructive → a tampered envelope refuses a fresh folder outright → the pristine envelope is adopted by a fresh $200k P2-gated folder (/11 p2-fresh, continuity identity sealed, rearm consumed once, gate re-seeking, no spurious target completion). |
 | run_mutations | Mutation battery over the critical protections — every mutant must be KILLED by its named suite, with hash-verified pristine restore. |
 
 ## Evidence-gated parts

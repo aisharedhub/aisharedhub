@@ -163,6 +163,57 @@ offline harnesses now mirror that production attach order
 (`_mt5_initialize()` immediately after installing the fake), which is
 what made the full pinned battery representative.
 
+## 13. v3.9.1 — continuity-chain repairs and the pre-commit reproof
+
+Independent adversarial testing proved four real defects that the
+earlier battery missed (its continuity suite asserted only the
+fail-closed refusal and never drove an export to success). Each is
+repaired at root cause; no validator was weakened:
+
+* **A clean P1 completion could never export continuity.** The
+  process-wide repaired-from-seed latch — set at the virgin seed
+  install — still blocked the export baseline after all 20 window rows
+  had become dated live-account observations, and the completion path
+  then wrote a PERMANENT `AUDIT_REQUIRED` marker onto the aligned,
+  pending-free folder. Export sites now consult the window's own dated
+  provenance (`_window_live_proven`), and an aligned clean completion
+  defers continuity preparation to `--export-continuity` instead of
+  poisoning the folder. Ambiguous completions still audit-lock.
+* **Startup identity ordering.** The continuity-transaction validator
+  (and the legacy V380 watch validator) compared stored identity
+  against `EXPECTED_LOGIN/SERVER`, which bind only after MT5 attach —
+  so a completed folder carrying a PREPARED transaction reloaded
+  CUSTODY-ONLY on every restart. Load-time validation now judges the
+  image against its own bound `mt5_identity`; the boot identity gate
+  still refuses a wrong live account before any order.
+* **Legitimate leading BTC missing history was rejected.** BTC's
+  through-vector legitimately begins ~2,500 sessions into the master
+  calendar; the all-finite digest refused it, so the terminal fold
+  could never be proven. The digest now binds the counted
+  leading-missing prefix plus the exact finite suffix; interior or
+  trailing gaps still refuse.
+* **The r4 migration proved inventory only once.** The commit now
+  re-maps every live ticket into the committed takeover inventory
+  IMMEDIATELY before committing: a new, grown, reversed or foreign
+  ticket refuses the commit and the migration waits under custody
+  rails; pure reductions remain acceptable.
+* Target completion now double-saves, landing the permanent hit in
+  BOTH recovery images at commit time (previously the second image
+  relied on incidental later saves).
+* Documentation corrected: `--yes` skips confirmation unconditionally
+  (virgin starts included); the deliberate isolated startup re-exec is
+  documented; the migration-wait custody semantics are stated
+  precisely (hard-loss rails and broker-side protections during the
+  wait; strategy servicing after COMMITTED).
+
+test_continuity_chain now proves the REAL end-to-end chain (campaign →
+aligned completion with a PREPARED transaction → export writes the
+hash-enveloped artifact → re-export non-destructive → tampered envelope
+refused → fresh P2-gated adoption with the continuity identity sealed
+and rearm consumed once). test_r4_migration adds the pre-commit
+reproof attack (a 5th apparently-bot-owned ticket after
+INVENTORY_PROVED refuses the commit; removal commits cleanly).
+
 ## Retained unchanged
 
 The complete V389 safety engine: crash-safe double-image state with

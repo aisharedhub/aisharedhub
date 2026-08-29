@@ -1,4 +1,4 @@
-# Updated V376 — MT5 Vol-Targeted Bot v12 (final build v3.9.0-updated-v376)
+# Updated V376 — MT5 Vol-Targeted Bot v12 (final build v3.9.1-updated-v376)
 
 The frozen V376 five-sleeve strategy (ORB 40% / S8V 10% / BTC 20% /
 XAU-mom 10% / XAU-beta 5%, ONF permanently disabled) with V376-style
@@ -83,8 +83,16 @@ lifecycle state; the interpreted recipe is printed before any binding):
     # P2 immediate (standalone; no continuity)
     python vol_target_bot_v12.py --entry-policy immediate --mode grind --phase 2 --capital 200000 --live
 
-A live start asks for the typed confirmation `I ACCEPT LIVE`. Append
-`--yes` ONLY for unattended exact resume of the identical command.
+A live start asks for the typed confirmation `I ACCEPT LIVE`.
+`--yes` skips that confirmation UNCONDITIONALLY — on a virgin first
+start as much as on a resume. Reserve it for unattended exact resume of
+the identical command; a first start deserves the typed confirmation.
+
+Startup note: the bot deliberately re-executes itself once into an
+isolated Python child (`-E -P -B`) before doing anything else — one
+extra python process belonging to the same console is normal. Closing
+that console window stops the bot without flattening (the V376-style
+abrupt stop; resume with the identical command).
 
 Strictly read-only:
 
@@ -97,7 +105,9 @@ Durable operational commands:
     python vol_target_bot_v12.py --pause-new-risk      # durable pause at the running bot's next poll
     python vol_target_bot_v12.py --resume-paused       # lifts the pause only after safety-record proof
     python vol_target_bot_v12.py --flatten-and-stop --live   # managed close-everything, then exit (folder stays resumable)
-    python vol_target_bot_v12.py --export-continuity   # after permanent P1 target completion
+    python vol_target_bot_v12.py --export-continuity   # after permanent P1 target completion;
+                                                       # run it after the completed session's
+                                                       # NY17 close so the terminal fold can prove
 
 Destructive account-wide recovery (never a normal resume):
 
@@ -157,11 +167,21 @@ build with the supplied state, and the account is
 5. The new bot reconciles and commits the one-time r4 takeover BEFORE
    permitting any new order: it proves the exact source identity, maps
    every live ticket, rebuilds the dated controller ledger from the
-   supplied evidence, rebinds the lifecycle, and commits atomically to
-   both recovery images. New risk stays blocked until the migration is
-   COMMITTED and the anchor re-proves (full-or-hold). Existing
-   positions remain protected throughout; rails, reductions and closes
-   are live from the first poll.
+   supplied evidence, re-proves the complete live inventory a FINAL
+   time immediately before committing (a new, grown, reversed or
+   foreign ticket refuses the commit), rebinds the lifecycle, and
+   commits atomically to both recovery images. New risk stays blocked
+   until the migration is COMMITTED and the anchor re-proves
+   (full-or-hold). While the migration owns startup — normally a few
+   seconds; longer only when a proof cannot complete — the custody
+   rails re-read the account every pass and enforce the SOURCE's own
+   hard-loss lines (floor/daily/breaker: a breach flattens
+   account-wide), and each inherited position keeps its broker-side
+   protections; ordinary strategy servicing (partial reductions, ORB
+   timed exits, target handling) begins after COMMITTED, because it
+   requires the rebuilt dated ledger. A migration that stays WAITING is
+   loudly logged with its exact blocker and is the operator's cue to
+   look.
 6. The migration is permanently completed after its commit; every later
    restart is a native resume of the same command.
 
