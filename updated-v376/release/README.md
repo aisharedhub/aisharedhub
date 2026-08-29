@@ -106,8 +106,9 @@ Durable operational commands:
     python vol_target_bot_v12.py --resume-paused       # lifts the pause only after safety-record proof
     python vol_target_bot_v12.py --flatten-and-stop --live   # managed close-everything, then exit (folder stays resumable)
     python vol_target_bot_v12.py --export-continuity   # after permanent P1 target completion;
-                                                       # run it after the completed session's
-                                                       # NY17 close so the terminal fold can prove
+                                                       # run it after the hit session's NY17 close
+                                                       # so the terminal fold can prove a genuinely
+                                                       # completed session
 
 Destructive account-wide recovery (never a normal resume):
 
