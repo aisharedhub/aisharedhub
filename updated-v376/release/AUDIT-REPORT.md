@@ -121,3 +121,30 @@ them. Verdict by claim:
 Verification and repair were performed offline on temporary copies with
 the inert fake MT5; the supplied state and archives remained read-only;
 zero broker sends everywhere.
+
+---
+
+# Round 3 — line-by-line adversarial recheck of v3.9.1 itself (→ v3.9.2)
+
+At the operator's direction the v3.9.1 diff was re-reviewed line by
+line by a 51-agent adversarial battery (six diff lenses plus three
+defect-class hunters; every finding attacked by two independent
+refuters). Seventeen confirmed findings deduplicate to seven distinct
+defects — including one HIGH defect inside the v3.9.1 repair itself —
+all fixed in v3.9.2:
+
+| Defect | Repair |
+| --- | --- |
+| The window-provenance check was consulted only while the process-local repaired-from-seed latch was set; only the virgin bootstrap process ever sets it, so a restarted process (including the documented separate `--export-continuity` run) skipped provenance entirely and could export a seed-contaminated window as live history (HIGH) | Provenance is unconditional at all three export sites: export refuses whenever the 20-window is not fully dated live-account rows, latch or no latch |
+| The completion deferral could strand shapes the exporter must refuse, or that it could never reconstruct | `aligned_clean` additionally requires the export baseline to be constructible at the hit; anything else receives the LOUD permanent audit marker |
+| The exporter could never mint a deferred transaction: the producer-recipe check read the running process's CLI verb ("export"), not the folder's binding | The producer recipe derives from the folder's lifecycle binding |
+| The legacy V380 watch validator skipped its identity check entirely pre-bind (fail-open) and its load-time call sites passed None while holding the image | Unconditional identity compare (like the txn validator) with the owning image threaded through every call site |
+| The migration inventory proof accepted duplicate rows sharing one committed identifier (split-volume growth) and carried no account witness | Duplicate ticket/identifier rows refuse the proof; the read is sandwiched between two verified account witnesses (same login/server/balance, wrong account halts) |
+| CHANGES.md still declared v3.9.0 and denied the `--mt5-path` flag and the startup re-exec | Both corrected |
+| Digest-format change unversioned vs v3.9.0/v3.9.1 step records | Documented: those builds were never deployed (the only live predecessor is V389 r4, whose supplied state carries no step records — verified); a hypothetical old step fails closed as WAIT, never silently passes |
+
+New permanent proofs: the deferral-reconstruction chain (transient
+constructor failure at an exportable hit → clean deferral → the export
+command reconstructs under the binding recipe and writes the artifact),
+the loud early-hit audit classification, and the duplicate-row refusal.
+The full battery for the v3.9.2 build is recorded in TEST-RESULTS.md.
