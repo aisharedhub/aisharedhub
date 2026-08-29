@@ -222,3 +222,252 @@
 2026-08-29 00:37:17 NY | *** r4 migration: live ticket 30956569 does not map into the committed r4 inventory — fail-closed
 2026-08-29 00:37:17 NY |   [r4] migration PREPARED (both recovery images)
 2026-08-29 00:37:17 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:46:44 NY | connected: login 600092429 balance 200000.0 USD server OANDA-Prop Trader
+2026-08-29 00:46:44 NY | [recipe] interpreted command: module-import
+2026-08-29 00:46:44 NY | [recipe]   canonical form: n/a
+2026-08-29 00:46:44 NY | *** TIME/FEED HEALTH latch remains ACTIVE while all configured sessions are closed — awaiting the first open-session epoch proof; rails/closes remain active
+2026-08-29 00:46:44 NY | *** WAITING FOR MARKET — fresh folder remains UNBOUND; no challenge clock/state commit and no broker sends. Account-wide flat/orderless inventory and advancing feeds are rechecked until reopening.
+2026-08-29 00:46:44 NY | *** WAITING FOR MARKET: awaiting first expected-open broker tick
+2026-08-29 00:51:44 NY | *** WAITING FOR MARKET: awaiting first expected-open broker tick
+2026-08-29 00:53:34 NY | *** OPERATOR PAUSE: new risk durably paused; rails, reductions, closes and target handling continue
+2026-08-29 00:53:34 NY | [WARN] NO-NEW-RISK latch ACTIVE (Prague daily anchor unproved; positions retained, increases blocked; operator pause (--resume-paused to clear); r4 predecessor lifecycle awaiting one-time migration; unresolved account day-roll finality; unmerged clock-hold dip observation) — skipping new/increased exposure (test); reductions, closes, rails and reconciliation continue; each latch clears only on its own verified recovery
+2026-08-29 00:53:34 NY | *** OPERATOR RESUME held: pause record malformed — manual review required
+2026-08-29 00:53:34 NY | *** DURABLE SAFETY RECORD INVALID (_applied_exposure malformed/conflicting) — fail-closed/manual recovery; rails remain live
+2026-08-29 00:53:34 NY | *** OPERATOR RESUME held: safety records must validate before the pause clears
+2026-08-29 00:53:34 NY | *** OPERATOR RESUME: durable pause cleared after proof; ordinary authorization gates still apply
+2026-08-29 00:53:34 NY | *** OPERATOR PAUSE: new risk durably paused; rails, reductions, closes and target handling continue
+2026-08-29 00:53:34 NY | *** FLATTEN-AND-STOP REFUSED: the loaded state is not an identity-bound lifecycle of this account
+2026-08-29 00:53:34 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.09 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=None order=None deal=None · path full close XAUUSD.sim #30956569 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:53:34 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:53:34 NY | *** flatten 'operator flatten-and-stop': 1 exact-ticket outcome(s) remain quarantined after fresh read — no same-ticket resend
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.03 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=None order=None deal=None · path full close XAUUSD.sim #30956572 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:53:34 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:53:34 NY | *** flatten 'operator flatten-and-stop': 2 exact-ticket outcome(s) remain quarantined after fresh read — no same-ticket resend
+2026-08-29 00:53:34 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+2026-08-29 00:53:34 NY | *** FLATTEN-AND-STOP COMPLETE: account is authoritatively flat and orderless; the durable pause holds until --resume-paused. Exiting.
+2026-08-29 00:53:34 NY | *** OPERATOR RESUME: durable pause cleared after proof; ordinary authorization gates still apply
+2026-08-29 00:54:34 NY | *** OPERATOR PAUSE: new risk durably paused; rails, reductions, closes and target handling continue
+2026-08-29 00:54:34 NY | [WARN] NO-NEW-RISK latch ACTIVE (Prague daily anchor unproved; positions retained, increases blocked; operator pause (--resume-paused to clear); r4 predecessor lifecycle awaiting one-time migration; unresolved account day-roll finality; unmerged clock-hold dip observation) — skipping new/increased exposure (test); reductions, closes, rails and reconciliation continue; each latch clears only on its own verified recovery
+2026-08-29 00:54:34 NY | *** OPERATOR RESUME held: pause record malformed — manual review required
+2026-08-29 00:54:34 NY | *** DURABLE SAFETY RECORD INVALID (_applied_exposure malformed/conflicting) — fail-closed/manual recovery; rails remain live
+2026-08-29 00:54:34 NY | *** OPERATOR RESUME held: safety records must validate before the pause clears
+2026-08-29 00:54:34 NY | *** OPERATOR RESUME: durable pause cleared after proof; ordinary authorization gates still apply
+2026-08-29 00:54:34 NY | *** OPERATOR PAUSE: new risk durably paused; rails, reductions, closes and target handling continue
+2026-08-29 00:54:34 NY | *** FLATTEN-AND-STOP REFUSED: the loaded state is not an identity-bound lifecycle of this account
+2026-08-29 00:54:34 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.09 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=None order=None deal=None · path full close XAUUSD.sim #30956569 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:34 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:34 NY | *** flatten 'operator flatten-and-stop': 1 exact-ticket outcome(s) remain quarantined after fresh read — no same-ticket resend
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.03 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=None order=None deal=None · path full close XAUUSD.sim #30956572 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:34 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:34 NY | *** flatten 'operator flatten-and-stop': 2 exact-ticket outcome(s) remain quarantined after fresh read — no same-ticket resend
+2026-08-29 00:54:34 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.09 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956570 deal=30956571 · path full close XAUUSD.sim #30956569 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:34 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:34 NY |   close ACK XAUUSD.sim 0.09 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] XAUUSD.sim 0.09 lots · ticket #30956569 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:54:34 NY | *** close intent RESOLVED TICKET_ABSENT: XAUUSD.sim #30956569 close 0.09
+2026-08-29 00:54:34 NY | *** flatten 'operator flatten-and-stop': 3 account position(s) remain after fresh broker read — retry
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.03 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956573 deal=30956574 · path full close XAUUSD.sim #30956572 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:34 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:34 NY |   close ACK XAUUSD.sim 0.03 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] XAUUSD.sim 0.03 lots · ticket #30956572 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:54:34 NY | *** close intent RESOLVED TICKET_ABSENT: XAUUSD.sim #30956572 close 0.03
+2026-08-29 00:54:34 NY | *** flatten 'operator flatten-and-stop': 2 account position(s) remain after fresh broker read — retry
+[CLOSE] symbol BTCUSD.sim · side SELL · lots 0.6 · price 78,500.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956578 deal=30956579 · path full close BTCUSD.sim #30956577 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:34 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:34 NY |   close ACK BTCUSD.sim 0.6 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] BTCUSD.sim 0.6 lots · ticket #30956577 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:54:34 NY | *** close intent RESOLVED TICKET_ABSENT: BTCUSD.sim #30956577 close 0.6
+2026-08-29 00:54:34 NY | *** flatten 'operator flatten-and-stop': 1 account position(s) remain after fresh broker read — retry
+[CLOSE] symbol US100.sim · side SELL · lots 1.3 · price 29,650.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956590 deal=30956591 · path full close US100.sim #30956589 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:34 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:34 NY |   close ACK US100.sim 1.3 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] US100.sim 1.3 lots · ticket #30956589 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:54:34 NY | *** close intent RESOLVED TICKET_ABSENT: US100.sim #30956589 close 1.3
+2026-08-29 00:54:34 NY | *** FLATTEN-AND-STOP COMPLETE: account is authoritatively flat and orderless; the durable pause holds until --resume-paused. Exiting.
+2026-08-29 00:54:35 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+2026-08-29 00:54:35 NY | *** FLATTEN-AND-STOP COMPLETE: account is authoritatively flat and orderless; the durable pause holds until --resume-paused. Exiting.
+2026-08-29 00:54:35 NY | *** OPERATOR RESUME: durable pause cleared after proof; ordinary authorization gates still apply
+2026-08-29 00:54:49 NY | *** controller ledger could not chain the booked session — dated economic authority QUARANTINED; no new risk until a shadow rebuild/backfill re-proves it
+2026-08-29 00:54:49 NY | *** live book-return authority became short/corrupt — NO NEW RISK until an inspected restart repairs it from the pinned full seed
+2026-08-29 00:54:49 NY | *** undated legacy return window is NOT economic authority — NO NEW RISK (the one-time r4 migration or a fresh lifecycle is required)
+2026-08-29 00:54:49 NY | *** controller ledger malformed — NO NEW RISK; restore the recovery image or start a fresh lifecycle
+2026-08-29 00:54:49 NY |   [applied] inventory != targets: proven daily leverage 2.00x recorded (requested 4.00x) — booked returns divide by what was actually applied
+2026-08-29 00:54:49 NY | *** POSITION INVENTORY UNKNOWN (positions_get returned None) — NO-NEW-RISK active; account-equity rails still run, but position-specific closes retry when readable
+2026-08-29 00:54:50 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:54:50 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:54:50 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:54:50 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:54:50 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:54:50 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:54:50 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:54:50 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:54:50 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:54:50 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:54:50 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:54:50 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:54:50 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:54:50 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:54:50 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:54:50 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:54:51 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:54:51 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:54:51 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:54:51 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:54:51 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:54:51 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:54:51 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:54:51 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:54:51 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:54:51 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:54:51 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:54:51 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:54:51 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:54:51 NY | *** EXCLUSIVE-ACCOUNT CONFLICT: 1 foreign, wrong-symbol, or malformed/unproved position(s) detected — ordinary rails do not auto-close them; target completion is account-wide; all new risk blocked
+2026-08-29 00:54:51 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:54:51 NY | *** r4 migration: live ticket 30956569 does not map into the committed r4 inventory — fail-closed
+2026-08-29 00:54:51 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:54:51 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:54:52 NY | *** OPERATOR PAUSE: new risk durably paused; rails, reductions, closes and target handling continue
+2026-08-29 00:54:52 NY | [WARN] NO-NEW-RISK latch ACTIVE (Prague daily anchor unproved; positions retained, increases blocked; operator pause (--resume-paused to clear); r4 predecessor lifecycle awaiting one-time migration; unresolved account day-roll finality; unmerged clock-hold dip observation) — skipping new/increased exposure (test); reductions, closes, rails and reconciliation continue; each latch clears only on its own verified recovery
+2026-08-29 00:54:52 NY | *** OPERATOR RESUME held: pause record malformed — manual review required
+2026-08-29 00:54:52 NY | *** DURABLE SAFETY RECORD INVALID (_applied_exposure malformed/conflicting) — fail-closed/manual recovery; rails remain live
+2026-08-29 00:54:52 NY | *** OPERATOR RESUME held: safety records must validate before the pause clears
+2026-08-29 00:54:52 NY | *** OPERATOR RESUME: durable pause cleared after proof; ordinary authorization gates still apply
+2026-08-29 00:54:52 NY | *** OPERATOR PAUSE: new risk durably paused; rails, reductions, closes and target handling continue
+2026-08-29 00:54:52 NY | *** FLATTEN-AND-STOP REFUSED: the loaded state is not an identity-bound lifecycle of this account
+2026-08-29 00:54:52 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.09 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=None order=None deal=None · path full close XAUUSD.sim #30956569 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:52 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:52 NY | *** flatten 'operator flatten-and-stop': 1 exact-ticket outcome(s) remain quarantined after fresh read — no same-ticket resend
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.03 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=None order=None deal=None · path full close XAUUSD.sim #30956572 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:52 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:52 NY | *** flatten 'operator flatten-and-stop': 2 exact-ticket outcome(s) remain quarantined after fresh read — no same-ticket resend
+2026-08-29 00:54:52 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.09 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956570 deal=30956571 · path full close XAUUSD.sim #30956569 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:52 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:52 NY |   close ACK XAUUSD.sim 0.09 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] XAUUSD.sim 0.09 lots · ticket #30956569 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:54:52 NY | *** close intent RESOLVED TICKET_ABSENT: XAUUSD.sim #30956569 close 0.09
+2026-08-29 00:54:52 NY | *** flatten 'operator flatten-and-stop': 3 account position(s) remain after fresh broker read — retry
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.03 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956573 deal=30956574 · path full close XAUUSD.sim #30956572 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:52 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:52 NY |   close ACK XAUUSD.sim 0.03 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] XAUUSD.sim 0.03 lots · ticket #30956572 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:54:52 NY | *** close intent RESOLVED TICKET_ABSENT: XAUUSD.sim #30956572 close 0.03
+2026-08-29 00:54:52 NY | *** flatten 'operator flatten-and-stop': 2 account position(s) remain after fresh broker read — retry
+[CLOSE] symbol BTCUSD.sim · side SELL · lots 0.6 · price 78,500.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956578 deal=30956579 · path full close BTCUSD.sim #30956577 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:52 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:52 NY |   close ACK BTCUSD.sim 0.6 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] BTCUSD.sim 0.6 lots · ticket #30956577 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:54:52 NY | *** close intent RESOLVED TICKET_ABSENT: BTCUSD.sim #30956577 close 0.6
+2026-08-29 00:54:52 NY | *** flatten 'operator flatten-and-stop': 1 account position(s) remain after fresh broker read — retry
+[CLOSE] symbol US100.sim · side SELL · lots 1.3 · price 29,650.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956590 deal=30956591 · path full close US100.sim #30956589 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:54:52 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:54:52 NY |   close ACK US100.sim 1.3 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] US100.sim 1.3 lots · ticket #30956589 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:54:52 NY | *** close intent RESOLVED TICKET_ABSENT: US100.sim #30956589 close 1.3
+2026-08-29 00:54:52 NY | *** FLATTEN-AND-STOP COMPLETE: account is authoritatively flat and orderless; the durable pause holds until --resume-paused. Exiting.
+2026-08-29 00:54:52 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+2026-08-29 00:54:52 NY | *** FLATTEN-AND-STOP COMPLETE: account is authoritatively flat and orderless; the durable pause holds until --resume-paused. Exiting.
+2026-08-29 00:54:52 NY | *** OPERATOR RESUME: durable pause cleared after proof; ordinary authorization gates still apply
+2026-08-29 00:57:32 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:57:32 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:57:32 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:57:32 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:57:32 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:57:32 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:57:32 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:58:05 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:58:05 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:58:05 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:58:05 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:58:05 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:58:05 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:58:05 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:58:46 NY | *** OPERATOR PAUSE: new risk durably paused; rails, reductions, closes and target handling continue
+2026-08-29 00:58:46 NY | [WARN] NO-NEW-RISK latch ACTIVE (Prague daily anchor unproved; positions retained, increases blocked; operator pause (--resume-paused to clear); r4 predecessor lifecycle awaiting one-time migration; unresolved account day-roll finality; unmerged clock-hold dip observation) — skipping new/increased exposure (test); reductions, closes, rails and reconciliation continue; each latch clears only on its own verified recovery
+2026-08-29 00:58:46 NY | *** OPERATOR RESUME held: pause record malformed — manual review required
+2026-08-29 00:58:46 NY | *** DURABLE SAFETY RECORD INVALID (_applied_exposure malformed/conflicting) — fail-closed/manual recovery; rails remain live
+2026-08-29 00:58:46 NY | *** OPERATOR RESUME held: safety records must validate before the pause clears
+2026-08-29 00:58:46 NY | *** OPERATOR RESUME: durable pause cleared after proof; ordinary authorization gates still apply
+2026-08-29 00:58:46 NY | *** OPERATOR PAUSE: new risk durably paused; rails, reductions, closes and target handling continue
+2026-08-29 00:58:46 NY | *** FLATTEN-AND-STOP REFUSED: the loaded state is not an identity-bound lifecycle of this account
+2026-08-29 00:58:46 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.09 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=None order=None deal=None · path full close XAUUSD.sim #30956569 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:58:47 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:58:47 NY | *** flatten 'operator flatten-and-stop': 1 exact-ticket outcome(s) remain quarantined after fresh read — no same-ticket resend
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.03 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=None order=None deal=None · path full close XAUUSD.sim #30956572 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:58:47 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:58:47 NY | *** flatten 'operator flatten-and-stop': 2 exact-ticket outcome(s) remain quarantined after fresh read — no same-ticket resend
+2026-08-29 00:58:47 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.09 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956570 deal=30956571 · path full close XAUUSD.sim #30956569 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:58:47 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:58:47 NY |   close ACK XAUUSD.sim 0.09 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] XAUUSD.sim 0.09 lots · ticket #30956569 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:58:47 NY | *** close intent RESOLVED TICKET_ABSENT: XAUUSD.sim #30956569 close 0.09
+2026-08-29 00:58:47 NY | *** flatten 'operator flatten-and-stop': 3 account position(s) remain after fresh broker read — retry
+[CLOSE] symbol XAUUSD.sim · side SELL · lots 0.03 · price 4,610.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956573 deal=30956574 · path full close XAUUSD.sim #30956572 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:58:47 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:58:47 NY |   close ACK XAUUSD.sim 0.03 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] XAUUSD.sim 0.03 lots · ticket #30956572 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:58:47 NY | *** close intent RESOLVED TICKET_ABSENT: XAUUSD.sim #30956572 close 0.03
+2026-08-29 00:58:47 NY | *** flatten 'operator flatten-and-stop': 2 account position(s) remain after fresh broker read — retry
+[CLOSE] symbol BTCUSD.sim · side SELL · lots 0.6 · price 78,500.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956578 deal=30956579 · path full close BTCUSD.sim #30956577 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:58:47 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:58:47 NY |   close ACK BTCUSD.sim 0.6 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] BTCUSD.sim 0.6 lots · ticket #30956577 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:58:47 NY | *** close intent RESOLVED TICKET_ABSENT: BTCUSD.sim #30956577 close 0.6
+2026-08-29 00:58:47 NY | *** flatten 'operator flatten-and-stop': 1 account position(s) remain after fresh broker read — retry
+[CLOSE] symbol US100.sim · side SELL · lots 1.3 · price 29,650.00 · SL UNKNOWN · TP UNKNOWN · broker result retcode=10009 order=30956590 deal=30956591 · path full close US100.sim #30956589 · realized P&L PENDING exact broker deal reconciliation
+2026-08-29 00:58:47 NY | *** CLOSE RESPONSE ACK/OUTCOME PENDING — exact-ticket authority retained; stale inventory cannot resend
+2026-08-29 00:58:47 NY |   close ACK US100.sim 1.3 (operator flatten-and-stop) — awaiting fresh ticket proof
+[CLOSE] US100.sim 1.3 lots · ticket #30956589 · realized P&L UNKNOWN (no exact causal broker deal receipt) · exposure reduction verified by TICKET_ABSENT
+2026-08-29 00:58:47 NY | *** close intent RESOLVED TICKET_ABSENT: US100.sim #30956589 close 1.3
+2026-08-29 00:58:47 NY | *** FLATTEN-AND-STOP COMPLETE: account is authoritatively flat and orderless; the durable pause holds until --resume-paused. Exiting.
+2026-08-29 00:58:47 NY | *** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing every position and cancelling every pending order on this dedicated account until flat/orderless proof
+2026-08-29 00:58:47 NY | *** FLATTEN-AND-STOP COMPLETE: account is authoritatively flat and orderless; the durable pause holds until --resume-paused. Exiting.
+2026-08-29 00:58:47 NY | *** OPERATOR RESUME: durable pause cleared after proof; ordinary authorization gates still apply
+2026-08-29 00:58:47 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:58:47 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:58:47 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:58:47 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:58:47 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:58:47 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:58:47 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:58:47 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:58:47 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:58:48 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:58:48 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:58:48 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:58:48 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:58:48 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:58:48 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:58:48 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:58:48 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:58:48 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:58:48 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:58:48 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:58:48 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:58:48 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:58:48 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:58:48 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:58:48 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:58:48 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:58:48 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:58:48 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:58:48 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:58:48 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED
+2026-08-29 00:58:49 NY |   [shadow] seed/broker BID-boundary overlap qualified on 2026-08-07: nas 0.0000bp xau 0.0000bp btc 0.0000bp (limit 2.0000bp); post-seed broker returns chained from the pinned seed level
+2026-08-29 00:58:49 NY |   [shadow] SEEDED 5270 sessions from shadow_seed.json (through 2026-08-07) + 15 broker gap session(s) (ORB covered 15/15): eq 2.6681 peak 2.6829 | CURRENT dd -0.55% | down-streak 1 session(s) | booked through 2026-08-28 (today's session books after the 17:00-NY cut + feed finality)
+2026-08-29 00:58:49 NY |   [start semantics] CONTINUITY: replayed history may restore crossing/low, and an arm only via a bounce on/after the challenge start
+2026-08-29 00:58:49 NY |   [r4] dated controller ledger REBUILT from evidence: 20d vol 0.3211% (stale undated window replaced) — LEDGER_REBUILT
+2026-08-29 00:58:49 NY | *** ONE-TIME r4 MIGRATION COMMITTED: lifecycle rebound to direct_lifecycle_binding/11, r4 receipts archived, dated controller ledger installed, clock-hold dip settled (-0.007265); ordinary native resume owns every future restart
+2026-08-29 00:58:49 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:58:49 NY | *** EXCLUSIVE-ACCOUNT CONFLICT: 1 foreign, wrong-symbol, or malformed/unproved position(s) detected — ordinary rails do not auto-close them; target completion is account-wide; all new risk blocked
+2026-08-29 00:58:49 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:58:49 NY | *** r4 migration: live ticket 30956569 does not map into the committed r4 inventory — fail-closed
+2026-08-29 00:58:49 NY |   [r4] migration PREPARED (both recovery images)
+2026-08-29 00:58:49 NY |   [r4] live inventory maps into the committed takeover — INVENTORY_PROVED

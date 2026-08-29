@@ -1,8 +1,26 @@
 """
-MT5 VOL-TARGETED BOT v12 — six-slot book (ONF disabled), cushion controller
+UPDATED V376 — MT5 VOL-TARGETED BOT v12 (final build v3.9.0-updated-v376)
 ============================================================================
 This is the LIVE implementation of the v12 backtest (docs/STRATEGY_SPEC_v12.md).
 It supersedes the v6 base (vol_target_bot.py), which traded NAS only.
+
+THIS BUILD: the frozen V376 strategy book and V376-style startup (bare
+single-terminal ``mt5.initialize()`` auto-discovery, no BAT wrapper, no
+watchdog, optional ``--yes`` for unattended exact resume) on the hardened
+V389 safety engine, with two verified r4 controller defects repaired:
+  * Defect 1 — undated controller history: every vol/dip observation now
+    lives in a DATED controller ledger (source-tagged, strictly ordered,
+    gap-quarantined); windows are derived from the ledger, never from an
+    anonymous list, so a stale parent-seed window can never bind again.
+  * Defect 2 — stale applied leverage: ``_last_L`` is only ever the
+    broker-PROVED applied daily leverage (per-sleeve inventory reconcile),
+    recorded beside the requested value; a requested-but-never-applied
+    controller output can never divide a booked return again.
+Sizing is FULL-OR-HOLD: an unproved anchor holds increases at zero; the
+engine never trades a halved size.  A supplied exact V389 r4 folder is
+adopted once through a dedicated one-time migration (inventory proof,
+ledger rebuild, atomic commit, permanent completion); the generic
+V383-V388 takeover machinery is removed.
 
 BOOK (six configured slots; ONF is permanently zero, so five execute):
   Sleeve                     Symbol group   TF            Weight
@@ -26,7 +44,7 @@ BRAIN (per docs/STRATEGY_SPEC_v12.md section 1):
     L       = min(L, 5%/(GMULT*vol20), THETA*BREAKER/max_dip20, MAX_LEVERAGE)
 Guards bind LAST, so the boost can never buy leverage the hard rules forbid.
 
-RESEARCH MODES: P1 = +10% phase, P2 = +5% phase.  This V389 build
+RESEARCH MODES: P1 = +10% phase, P2 = +5% phase.  This build
 requires one explicit ``--entry-policy gated|immediate`` selector before the
 familiar sealed P1/P2 command tokens.  ``gated`` retains the exact durable
 drawdown/bounce/cap wait.  ``immediate`` evaluates the unchanged strategy on
@@ -59,7 +77,7 @@ return is explicitly omitted rather than fabricated, controller history is
 unchanged, and a fresh bound equity snapshot begins the measurable interval.
 No generic or multi-session state receives that bridge.
 
-CAPITAL (V389 P2 immediate): ``--capital`` is the literal campaign base used
+CAPITAL: ``--capital`` is the literal campaign base used
 by the controller, target, hard floor, daily line and breaker allowance.  With
 ``--capital 200000`` the target is $210,000 and the hard floor is $180,000,
 even when the real balance at attachment differs.  Daily and breaker lines are
@@ -95,12 +113,19 @@ first.
 
 Requirements: Windows, MetaTrader 5 terminal, Python 3.11+
   pip install MetaTrader5 numpy tzdata
-Run:
+Run (flags accepted in any order; unknown/duplicate/contradictory refused):
+  python vol_target_bot_v12.py --entry-policy immediate --mode grind
+      --phase 2 --capital 200000 --live
   python vol_target_bot_v12.py --entry-policy gated --mode grind --phase 1
       --start-min-dd 0.02 --start-bounce 0.005 --post-loss-mult 0.75 --live
-  Change only ``gated`` to ``immediate`` for immediate-entry P1.  See
-  README_LIFECYCLE.md for the exact P2, FUNDED and continuity-export recipes.
-  Safety maintenance (never enters the strategy loop):
+  Change only ``gated``/``immediate`` to select the entry policy; append
+  ``--yes`` only for unattended exact resume of the identical command.  See
+  the release README for the exact P1/P2, FUNDED and continuity recipes.
+  Maintenance (read-only or managed; never enters the strategy loop):
+  python vol_target_bot_v12.py --diagnose
+  python vol_target_bot_v12.py --pause-new-risk
+  python vol_target_bot_v12.py --resume-paused
+  python vol_target_bot_v12.py --flatten-and-stop --live
   python vol_target_bot_v12.py --recover-safety --live
 Nothing here is investment advice.
 """
@@ -3989,105 +4014,116 @@ def _new_risk_blocked():
                 or anchor_unproved
                 or not gate_start_ok or not safety_ok)
 
+def _nnr_causes(reason=None):
+    """Truthful list of every active durable no-new-risk cause.
+
+    Shared by the per-poll latch line and the periodic operator status
+    (build order section 19: the console names the EXACT blocker).
+    Presentation only — never part of trading control.
+    """
+    causes = []
+    _st = _RUNTIME_STATE[0]
+    if _SAVE_FAILED[0]: causes.append("state save failed")
+    if _HEALTH_BAD[0]: causes.append(_HEALTH_REASON[0] or "time/feed unhealthy")
+    if _EXTERNAL_CASHFLOW_UNKNOWN[0]:
+        causes.append("external-cashflow history unproved")
+    if ((LIVE or EXPORT_CONTINUITY)
+            and not _UTC_EPOCH_QUALIFIED[0]):
+        causes.append("broker epoch frame not automatically qualified")
+    if _POSITIONS_UNKNOWN[0]: causes.append("positions inventory unreadable")
+    if _ORDERS_UNKNOWN[0]: causes.append("pending-order inventory unreadable")
+    if _ACCOUNT_CONFLICT[0]: causes.append("foreign/wrong-symbol position present")
+    if _PENDING_ORDER_CONFLICT[0]: causes.append("broker pending order present")
+    if _SAFETY_STATE_INVALID[0]: causes.append("corrupt durable safety record")
+    if _CONTINUITY_INVALID[0]: causes.append("invalid continuity artifact")
+    if _ECONOMIC_INPUT_INVALID[0]: causes.append("invalid economic seed authority")
+    if _GATE_START_INVALID[0]: causes.append("invalid challenge start authority")
+    if _DAILY_AUTHORITY_INVALID[0]: causes.append("unproved daily price authority")
+    if _SYMBOLS_BAD[0]: causes.append("required symbol selection unavailable")
+    if not _anchor_increase_authorized(_st):
+        causes.append(
+            "Prague daily anchor unproved; positions retained, increases blocked")
+    if _active_reopen_entry_guard() is not None:
+        causes.append("durable post-reopen quote cooldown")
+    if isinstance(_st, dict) and isinstance(_st.get("_order_intent"), dict):
+        causes.append("unresolved order intent")
+    if isinstance(_st, dict) and isinstance(_st.get("_close_intent"), dict):
+        _records = _close_intent_records(_st)
+        _count = "?" if _records is None else len(_records)
+        causes.append(f"{_count} unresolved exact-ticket close intent(s)")
+    if isinstance(_st, dict) and isinstance(_st.get("_close_only_halt"), dict):
+        causes.append("persistent close-only halt")
+    if isinstance(_st, dict) and "_pause_new_risk" in _st:
+        causes.append("operator pause (--resume-paused to clear)")
+    if (isinstance(_st, dict)
+            and _valid_v389_lifecycle_binding(
+                _st.get("_lifecycle_binding"))):
+        causes.append("r4 predecessor lifecycle awaiting one-time "
+                      "migration")
+    _r4rec = _st.get("_r4_migration") if isinstance(_st, dict) else None
+    if (isinstance(_st, dict) and "_r4_migration" in _st
+            and (not isinstance(_r4rec, dict)
+                 or _r4rec.get("stage") != "COMMITTED")):
+        causes.append("one-time r4 migration incomplete")
+    _recovery_record = (_st.get("_safety_recovery_pending")
+                        if isinstance(_st, dict) else None)
+    if (isinstance(_st, dict)
+            and "_safety_recovery_pending" in _st
+            and not (isinstance(_recovery_record, dict)
+                     and _recovery_record.get("status") == "COMMITTED")):
+        causes.append("incomplete V383 safety-recovery transaction")
+    if (isinstance(_st, dict)
+            and isinstance(_st.get("_ledger_recovery_halt"), dict)):
+        causes.append("multi-session ledger recovery halt")
+    if isinstance(_st, dict) and isinstance(_st.get("_target_flat_watch"), dict):
+        causes.append("target late-fill watch")
+    if isinstance(_st, dict) and isinstance(_st.get("_target_hit"), dict):
+        causes.append("permanent TARGET HIT phase lock")
+    if (isinstance(_st, dict)
+            and isinstance(_st.get("_continuity_export_txn"), dict)):
+        causes.append("continuity export settlement pending")
+    _takeover = (_st.get("_predecessor_takeover")
+                 if isinstance(_st, dict) else None)
+    if isinstance(_takeover, dict):
+        if _takeover.get("status") == "MANUAL_REVIEW":
+            causes.append("V383/V385 takeover manual review required")
+        elif _takeover.get("stage") != "COMMITTED":
+            causes.append(
+                "predecessor takeover "
+                + str(_takeover.get("stage", "unproved")).lower())
+    if _V388_OBSERVATION_SAFE_DOWN_ONLY:
+        causes.append(
+            "V388 incident is observation/safe-down only; MT5 has no "
+            "atomic account+inventory authority token")
+    if (isinstance(_st, dict)
+            and isinstance(_st.get("_daycount"), dict)
+            and isinstance(_st["_daycount"].get("pending"), dict)):
+        causes.append("unresolved account day-roll finality")
+    if (isinstance(_st, dict)
+            and isinstance(_st.get("_daycount"), dict)
+            and isinstance(_st["_daycount"].get(
+                "next_interval_candidate"), dict)):
+        causes.append("queued Friday NY17 account mark")
+    if isinstance(_st, dict) and "_clock_hold_dip" in _st:
+        causes.append("unmerged clock-hold dip observation")
+    if isinstance(_st, dict) and "_unleased_reopen_guard" in _st:
+        causes.append("unleased closed-start reopen stabilization")
+    if not causes and reason is not None:
+        # Some fail-closed send guards (invalid contract metadata, crossed
+        # tick, off-grid lot) are intentionally local/transient rather than
+        # durable global latches.  Still report the actual guard reason;
+        # never an empty cause list for an active latch.
+        causes.append(str(reason))
+    return causes
+
+
 def _nnr_block(reason):
     """v3.7.12 (P1b): an exposure-INCREASING order path hit while the latch is
     set — skip it with ONE loud line per poll (exempt from _log_throttled by
     design: the operator must see it every poll)."""
     if not _NNR_POLL[0]:
         _NNR_POLL[0] = True
-        causes = []
-        _st = _RUNTIME_STATE[0]
-        if _SAVE_FAILED[0]: causes.append("state save failed")
-        if _HEALTH_BAD[0]: causes.append(_HEALTH_REASON[0] or "time/feed unhealthy")
-        if _EXTERNAL_CASHFLOW_UNKNOWN[0]:
-            causes.append("external-cashflow history unproved")
-        if ((LIVE or EXPORT_CONTINUITY)
-                and not _UTC_EPOCH_QUALIFIED[0]):
-            causes.append("broker epoch frame not automatically qualified")
-        if _POSITIONS_UNKNOWN[0]: causes.append("positions inventory unreadable")
-        if _ORDERS_UNKNOWN[0]: causes.append("pending-order inventory unreadable")
-        if _ACCOUNT_CONFLICT[0]: causes.append("foreign/wrong-symbol position present")
-        if _PENDING_ORDER_CONFLICT[0]: causes.append("broker pending order present")
-        if _SAFETY_STATE_INVALID[0]: causes.append("corrupt durable safety record")
-        if _CONTINUITY_INVALID[0]: causes.append("invalid continuity artifact")
-        if _ECONOMIC_INPUT_INVALID[0]: causes.append("invalid economic seed authority")
-        if _GATE_START_INVALID[0]: causes.append("invalid challenge start authority")
-        if _DAILY_AUTHORITY_INVALID[0]: causes.append("unproved daily price authority")
-        if _SYMBOLS_BAD[0]: causes.append("required symbol selection unavailable")
-        if not _anchor_increase_authorized(_st):
-            causes.append(
-                "Prague daily anchor unproved; positions retained, increases blocked")
-        if _active_reopen_entry_guard() is not None:
-            causes.append("durable post-reopen quote cooldown")
-        if isinstance(_st, dict) and isinstance(_st.get("_order_intent"), dict):
-            causes.append("unresolved order intent")
-        if isinstance(_st, dict) and isinstance(_st.get("_close_intent"), dict):
-            _records = _close_intent_records(_st)
-            _count = "?" if _records is None else len(_records)
-            causes.append(f"{_count} unresolved exact-ticket close intent(s)")
-        if isinstance(_st, dict) and isinstance(_st.get("_close_only_halt"), dict):
-            causes.append("persistent close-only halt")
-        if isinstance(_st, dict) and "_pause_new_risk" in _st:
-            causes.append("operator pause (--resume-paused to clear)")
-        if (isinstance(_st, dict)
-                and _valid_v389_lifecycle_binding(
-                    _st.get("_lifecycle_binding"))):
-            causes.append("r4 predecessor lifecycle awaiting one-time "
-                          "migration")
-        _r4rec = _st.get("_r4_migration") if isinstance(_st, dict) else None
-        if (isinstance(_st, dict) and "_r4_migration" in _st
-                and (not isinstance(_r4rec, dict)
-                     or _r4rec.get("stage") != "COMMITTED")):
-            causes.append("one-time r4 migration incomplete")
-        _recovery_record = (_st.get("_safety_recovery_pending")
-                            if isinstance(_st, dict) else None)
-        if (isinstance(_st, dict)
-                and "_safety_recovery_pending" in _st
-                and not (isinstance(_recovery_record, dict)
-                         and _recovery_record.get("status") == "COMMITTED")):
-            causes.append("incomplete V383 safety-recovery transaction")
-        if (isinstance(_st, dict)
-                and isinstance(_st.get("_ledger_recovery_halt"), dict)):
-            causes.append("multi-session ledger recovery halt")
-        if isinstance(_st, dict) and isinstance(_st.get("_target_flat_watch"), dict):
-            causes.append("target late-fill watch")
-        if isinstance(_st, dict) and isinstance(_st.get("_target_hit"), dict):
-            causes.append("permanent TARGET HIT phase lock")
-        if (isinstance(_st, dict)
-                and isinstance(_st.get("_continuity_export_txn"), dict)):
-            causes.append("continuity export settlement pending")
-        _takeover = (_st.get("_predecessor_takeover")
-                     if isinstance(_st, dict) else None)
-        if isinstance(_takeover, dict):
-            if _takeover.get("status") == "MANUAL_REVIEW":
-                causes.append("V383/V385 takeover manual review required")
-            elif _takeover.get("stage") != "COMMITTED":
-                causes.append(
-                    "predecessor takeover "
-                    + str(_takeover.get("stage", "unproved")).lower())
-        if _V388_OBSERVATION_SAFE_DOWN_ONLY:
-            causes.append(
-                "V388 incident is observation/safe-down only; MT5 has no "
-                "atomic account+inventory authority token")
-        if (isinstance(_st, dict)
-                and isinstance(_st.get("_daycount"), dict)
-                and isinstance(_st["_daycount"].get("pending"), dict)):
-            causes.append("unresolved account day-roll finality")
-        if (isinstance(_st, dict)
-                and isinstance(_st.get("_daycount"), dict)
-                and isinstance(_st["_daycount"].get(
-                    "next_interval_candidate"), dict)):
-            causes.append("queued Friday NY17 account mark")
-        if isinstance(_st, dict) and "_clock_hold_dip" in _st:
-            causes.append("unmerged clock-hold dip observation")
-        if isinstance(_st, dict) and "_unleased_reopen_guard" in _st:
-            causes.append("unleased closed-start reopen stabilization")
-        if not causes:
-            # Some fail-closed send guards (invalid contract metadata, crossed
-            # tick, off-grid lot) are intentionally local/transient rather than
-            # durable global latches.  Still print the actual guard reason;
-            # never emit an empty "NO-NEW-RISK latch ACTIVE ()" diagnostic.
-            causes.append(str(reason))
+        causes = _nnr_causes(reason)
         _console_note_wait(
             "no-new-risk latch active: " + ("; ".join(causes) or str(reason)))
         log(f"[WARN] NO-NEW-RISK latch ACTIVE ({'; '.join(causes)}) — skipping "
@@ -25545,8 +25581,10 @@ def shadow_backfill(st, sh, max_sessions=40):
                                 else f"needs {need:+.2f}% more"))
         if START_DOWN_DAYS > 0:
             conds.append(f"down-days gate ({START_DOWN_DAYS}): streak {streak}")
-        log(f"[GATE] gate status NOW: " + " | ".join(conds) +
-            (" -> ARMED immediately" if armed_now else " -> waiting"))
+        log(f"[GATE] gate status NOW: eq {float(sh.get('eq', 1.0)):.4f} "
+            f"peak {float(sh.get('peak', 1.0)):.4f} · "
+            + " | ".join(conds)
+            + (" -> ARMED immediately" if armed_now else " -> waiting"))
         if sh.get("gate_crossed") and not sh.get("armed") and not armed_now:
             # v3.7.5 (F10b): the line above predates the bounce gate; when
             # the replay landed CROSSED, print the stage-2 truth (incl. the
@@ -26240,7 +26278,8 @@ def _log_gate_status(sh, note=""):
     _gd = sh.get("gate_done")
     _led = (datetime.fromordinal(int(_gd)).date().isoformat()
             if _gd is not None else sh.get("session"))
-    log(f"[GATE] gate eq {_ge:.4f} dd {(_ge/_gp-1.0)*100:+.2f}% "
+    log(f"[GATE] gate eq {_ge:.4f} peak {_gp:.4f} dd "
+        f"{(_ge/_gp-1.0)*100:+.2f}% "
         f"(book eq {sh['eq']:.4f}) | CROSSED "
         f"-{START_MIN_DD*100:.1f}%, post-crossing low {_lo:.4f}, bounce "
         f"{_bn:+.2f}% (arms at +{START_BOUNCE*100:.2f}%) — "
@@ -34496,18 +34535,28 @@ def _render_resume_line(st, open_count):
 
 
 def _render_status_line(st, ai, start_balance, leverage, polls, open_count):
+    """Two-line operator status (build order section 19): balance/equity,
+    capital, target+remaining, daily halt/breaker/floor distances, position
+    count, requested vs broker-applied vs gross leverage, full-history gate
+    progress, feed age, daily/ORB status and the exact strongest blocker."""
     anchor = ((st.get("breaker") or {}).get("anchor", start_balance)
               if isinstance(st, dict) else start_balance)
     equity = getattr(ai, "equity", None)
     balance = getattr(ai, "balance", None)
+    binding = _economic_binding(st)
+    breaker_bps = (binding.get("breaker_bps")
+                   if isinstance(binding, dict) else None)
     if _finite_num(anchor, positive=True):
         floor = _translated_floor_line(st)
         daily = _translated_loss_line(anchor, 500, st)
+        breaker = _translated_loss_line(anchor, breaker_bps, st)
         target = _target_display_value(st, start_balance)
     else:
-        floor = daily = target = None
+        floor = daily = breaker = target = None
     to_halt = (float(equity) - daily
                if _finite_num(equity) and _finite_num(daily) else None)
+    to_breaker = (float(equity) - breaker
+                  if _finite_num(equity) and _finite_num(breaker) else None)
     to_floor = (float(equity) - floor
                 if _finite_num(equity) and _finite_num(floor) else None)
     remaining = (max(0.0, target - float(balance))
@@ -34517,8 +34566,54 @@ def _render_status_line(st, ai, start_balance, leverage, polls, open_count):
                 if isinstance(witness, dict) else None)
     tick_text = (f"{float(tick_age):.0f}s" if _finite_num(tick_age)
                  else "UNKNOWN (WAITING)")
-    lev_text = (f"{float(leverage):.1f}x" if _finite_num(leverage)
-                else "UNKNOWN")
+    requested = st.get("_requested_L") if isinstance(st, dict) else None
+    applied = (leverage if _finite_num(leverage)
+               else (st.get("_last_L") if isinstance(st, dict) else None))
+    lev_text = ((f"req {float(requested):.2f}x" if _finite_num(requested)
+                 else "req UNKNOWN")
+                + (f" applied {float(applied):.2f}x" if _finite_num(applied)
+                   else " applied UNKNOWN"))
+    exposure = st.get("_applied_exposure") if isinstance(st, dict) else None
+    gross = None
+    if _valid_applied_exposure(exposure):
+        gross = sum(abs(float(row["frac"]))
+                    for row in exposure["sleeves"].values())
+        if exposure.get("session") != ny_session_key():
+            gross = None               # stale proof: never display as current
+    gross_text = (f"{gross:.2f}x" if _finite_num(gross)
+                  else "UNPROVED")
+    sh = st.get("shadow") if isinstance(st, dict) else None
+    if isinstance(sh, dict) and sh.get("armed") is True:
+        gate_text = "armed"
+    elif _immediate_entry_authorized(st):
+        gate_text = "immediate (gate waived)"
+    elif isinstance(sh, dict):
+        cap = sh.get("gate_cap_left")
+        crossed = bool(sh.get("gate_crossed_on")
+                       or sh.get("gate_crossed_session"))
+        gate_text = ("crossed, awaiting bounce" if crossed
+                     else "seeking drawdown")
+        if isinstance(cap, int) and not isinstance(cap, bool):
+            gate_text += f" (cap {cap} left)"
+    else:
+        gate_text = "no shadow authority"
+    dc = st.get("_daycount") if isinstance(st, dict) else None
+    daily_text = ("roll settling" if isinstance(dc, dict) and "pending" in dc
+                  else "settled")
+    orb = st.get("orb") if isinstance(st, dict) else None
+    if not isinstance(orb, dict):
+        orb_text = "idle"
+    elif orb.get("done") is not True:
+        orb_text = "range forming"
+    else:
+        orb_text = f"range done, tries {int(orb.get('tries', 0) or 0)}"
+    try:
+        causes = _nnr_causes()
+    except Exception:
+        causes = []
+    blocker_text = ("none" if not causes
+                    else (causes[0] + (f" (+{len(causes)-1} more)"
+                                       if len(causes) > 1 else "")))
     virtual_equity = _economic_mark(equity, st)
     sizing_suffix = (f" · virtual eq {_money(virtual_equity)} · "
                      f"virtual base {_money(_economic_capital(st))}"
@@ -34528,12 +34623,16 @@ def _render_status_line(st, ai, start_balance, leverage, polls, open_count):
                               f"{_money(start_balance)}")))
     return (f"[STATUS] eq {_money(equity)} · bal "
             f"{_money(balance)} · anchor {_money(anchor)} "
-            f"· to halt {_money(to_halt)} · to floor "
-            f"{_money(to_floor)} · lev {lev_text} · pos "
+            f"· to halt {_money(to_halt)} · to breaker "
+            f"{_money(to_breaker)} · to floor "
+            f"{_money(to_floor)} · pos "
             f"{open_count} · polls {polls} · tick age "
             f"{tick_text} · target {_money(target)} · closed balance "
             f"{_money(balance)} · amount remaining {_money(remaining)}"
-            f"{sizing_suffix}")
+            f"{sizing_suffix}\n"
+            f"[STATUS] lev {lev_text} · gross {gross_text} · gate "
+            f"{gate_text} · daily {daily_text} · orb {orb_text} · "
+            f"blocker {blocker_text}")
 
 
 def _why_no_trade_reason(st, session):
