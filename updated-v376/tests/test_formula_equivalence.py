@@ -27,8 +27,7 @@ BOT = os.path.join(HERE, "..", "build", "vol_target_bot_v12.py")
 SEED = os.path.join(HERE, "..", "build", "shadow_seed.json")
 EVDIR = os.environ.get(
     "UPDATED_V376_EVIDENCE_DIR",
-    "/tmp/claude-0/-home-user-aisharedhub/"
-    "98eb14e8-29fe-5768-a7d5-491331594ddb/scratchpad/evidence")
+    os.path.join(HERE, "..", "evidence"))
 
 zip_path = os.path.join(EVDIR, "376.zip")
 if not os.path.isfile(zip_path):

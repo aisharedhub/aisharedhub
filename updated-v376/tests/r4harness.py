@@ -24,8 +24,7 @@ BOT = os.path.join(HERE, "..", "build", "vol_target_bot_v12.py")
 SEED_PATH = os.path.join(HERE, "..", "build", "shadow_seed.json")
 EVDIR = os.environ.get(
     "UPDATED_V376_EVIDENCE_DIR",
-    "/tmp/claude-0/-home-user-aisharedhub/"
-    "98eb14e8-29fe-5768-a7d5-491331594ddb/scratchpad/evidence")
+    os.path.join(HERE, "..", "evidence"))
 
 NY = ZoneInfo("America/New_York")
 # Handoff moment: Monday 2026-08-31 15:30 NY (19:30Z, summer) — the r4

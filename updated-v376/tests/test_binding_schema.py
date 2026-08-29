@@ -16,8 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BOT = os.path.join(HERE, "..", "build", "vol_target_bot_v12.py")
 EVDIR = os.environ.get(
     "UPDATED_V376_EVIDENCE_DIR",
-    "/tmp/claude-0/-home-user-aisharedhub/"
-    "98eb14e8-29fe-5768-a7d5-491331594ddb/scratchpad/evidence")
+    os.path.join(HERE, "..", "evidence"))
 STATE = os.path.join(EVDIR, "bot_state_v12.json")
 
 sys.argv = ["vol_target_bot_v12.py"]

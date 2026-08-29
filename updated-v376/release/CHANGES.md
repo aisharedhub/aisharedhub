@@ -121,6 +121,26 @@ assertion gap (the bot itself needed no change), closed as follows:
   paused, never catches the missed lease up late, and places the four
   entries at the next session's lease after resume.
 
+## 11b. Handoff-report verification round (tests/packaging only)
+
+A relayed failure report claimed the supplied r4 state was mid-takeover
+(`ANCHOR_WAIT/ACTIVE/UNPROVED`, ledger bridge absent) and that the
+handoff suites fail against it. Verification against the actual
+supplied evidence disproved every state claim (the real takeover is
+`COMMITTED/COMMITTED/PROVED` with the bridge present and valid, in both
+recovery images), and the full battery reproduced from the pristine
+baseline with the evidence attached. The round still yielded two
+improvements, with the bot unchanged:
+
+* test_r4_migration adds the refusal proofs for the reported
+  hypothetical: a synthesized mid-takeover source and a bridge-absent
+  source are held fail-closed — no migration record, no sends, new risk
+  blocked, exact blocker named, folder left for the predecessor build
+  (64 -> 72 checks).
+* The evidence-gated suites' default evidence directory is now the
+  portable `evidence/` beside `tests/` (the env variable still takes
+  priority); a machine-specific absolute path had been baked in.
+
 ## 12. Pinned-terminal variant folders (packaging only)
 
 `DEFAULT/` remains the primary requested build (bare `mt5.initialize()`

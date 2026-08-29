@@ -18,7 +18,7 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 | test_binding_schema | 23 pass, 0 fail |
 | test_controller_ledger | 40 pass, 0 fail |
 | test_applied_exposure | 20 pass, 0 fail |
-| test_r4_migration | 64 pass, 0 fail |
+| test_r4_migration | 72 pass, 0 fail |
 | test_operator_commands | 70 pass, 0 fail |
 | test_console_status | 19 pass, 0 fail |
 | test_gate_history | 45 pass, 0 fail |
@@ -30,7 +30,7 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 | test_target_completion | 14 pass, 0 fail |
 | test_interrupt | 8 pass, 0 fail |
 | test_continuity_chain | 10 pass, 0 fail |
-| **Total** | **777 checks, 0 failures** |
+| **Total** | **785 checks, 0 failures** |
 | run_mutations | **15/15 mutants KILLED, 0 survived** |
 
 ## Suites (maintainer/tests/)
@@ -60,9 +60,20 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 Suites that replay the supplied live r4 state/archives
 (test_r4_migration, test_console_status, parts of test_gate_history and
 test_formula_equivalence, test_operator_commands part B) read the
-evidence via the `UPDATED_V376_EVIDENCE_DIR` environment variable and
-SKIP cleanly when it is absent. The evidence itself (account state) is
-never part of this archive.
+evidence from `UPDATED_V376_EVIDENCE_DIR`, defaulting to an `evidence/`
+directory beside `tests/` (place `bot_state_v12.json`, its `.bak`,
+`376.zip` and `V389.zip` there), and SKIP cleanly when absent. The
+evidence itself (account state) is never part of this archive. The
+published battery numbers were produced WITH the evidence attached —
+no handoff test was skipped.
+
+The r4 suite also proves the fail-closed path for the states this
+build must NOT migrate: a synthesized mid-takeover source (the real
+state with its `COMMITTED/COMMITTED/PROVED` markers flipped to
+`ANCHOR_WAIT/ACTIVE/UNPROVED`) and a bridge-absent source are refused
+without writing any migration record or sending anything, all new risk
+stays blocked, and the console names the exact blocker; the folder is
+left byte-for-byte for the predecessor build.
 
 ## Release verification performed
 

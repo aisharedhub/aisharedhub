@@ -206,5 +206,39 @@ st8["_predecessor_takeover"]["source_balance_cents"] += 1
 ok(not b8._r4_migration_source_shape_ok(st8),
    "tampered takeover receipt refuses the migration")
 
+# a MID-TAKEOVER source is held fail-closed, never migrated.  (The real
+# supplied state is COMMITTED/COMMITTED/PROVED with the ledger bridge
+# present; this SYNTHESIZED variant flips only those markers to prove
+# the refusal path for a predecessor stopped mid-takeover.)
+b9, fake9, st9, _ = r4harness.boot()
+tk9 = st9["_predecessor_takeover"]
+tk9["stage"] = "ANCHOR_WAIT"
+tk9["status"] = "ACTIVE"
+tk9["anchor_status"] = "UNPROVED"
+ok(not b9._r4_migration_source_shape_ok(st9),
+   "mid-takeover source (ANCHOR_WAIT/ACTIVE/UNPROVED) never migrates")
+sent9 = len(fake9.sent)
+out9 = b9._advance_r4_migration(st9)
+ok(out9 == "refused" and "_r4_migration" not in st9,
+   f"mid-takeover advance refuses without writing any migration record "
+   f"({out9})")
+ok(len(fake9.sent) == sent9, "the refusal sends nothing")
+b9._RUNTIME_STATE[0] = st9
+ok(b9._new_risk_blocked(),
+   "all new risk stays blocked on the mid-takeover folder")
+ok("predecessor takeover anchor_wait" in b9._nnr_causes(),
+   "the console names the EXACT blocker (predecessor takeover anchor_wait)")
+
+# a bridge-absent source refuses identically (the bridge is a required
+# receipt family; its absence means the old bot never finished)
+b10, fake10, st10, _ = r4harness.boot()
+del st10["_v389_takeover_ledger_bridge"]
+ok(not b10._r4_migration_source_shape_ok(st10),
+   "bridge-absent source never migrates")
+out10 = b10._advance_r4_migration(st10)
+ok(out10 == "refused" and "_r4_migration" not in st10,
+   f"bridge-absent advance refuses without writing any record ({out10})")
+ok(len(fake10.sent) == 0, "the bridge-absent refusal sends nothing")
+
 print(f"test_r4_migration: {PASS[0]} pass, {FAIL[0]} fail")
 sys.exit(1 if FAIL[0] else 0)
