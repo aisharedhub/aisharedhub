@@ -247,5 +247,69 @@ ok(tx6.get("producer_recipe") == "p1",
    f"({tx6.get('producer_recipe')!r})")
 ok(len(fake6.sent) == 0, "the reconstruction sends nothing")
 
+# ---- FAST PASS: a challenge completed in fewer than 20 live sessions ----
+# (the operator's real P1 took ~13) exports its true MIXED-provenance
+# window and a fresh P2-gated folder adopts it
+b7, fake7, market7, broker7, wd7 = sh.boot(P1_IMM)
+quiet(sh.drive_to_authorized, b7, market7)
+sh.set_clock(b7, utc(2026, 8, 31, 22, 5, 40))
+quiet(sh.run_polls, b7, market7, 16)
+quiet(sh.run_sessions, b7, market7, 3)
+st7 = b7._RUNTIME_STATE[0]
+srcs7 = [e.get("source")
+         for e in (st7.get("_controller_ledger") or {}).get("entries", [])
+         if e.get("book_ret") is not None][-20:]
+ok("live-account" in srcs7 and any(s != "live-account" for s in srcs7),
+   f"fast-pass window is genuinely mixed provenance "
+   f"({ {s: srcs7.count(s) for s in set(srcs7)} })")
+gross7 = sum(abs(p.volume) * (100.0 if "XAU" in p.symbol else 1.0)
+             * p.price_open for p in fake7.positions) / max(
+                 fake7.account.equity, 1.0)
+need7 = (220000.0 - fake7.account.equity) / fake7.account.equity + 0.03
+for sym in market7.closes:
+    market7.closes[sym][-1] *= (1.0 + need7 / max(gross7, 0.2))
+forming7 = market7.next_session_after(market7.sessions[-1])
+sh.set_clock(b7, datetime(forming7.year, forming7.month, forming7.day,
+                          10, 0, tzinfo=sh.NY).astimezone(timezone.utc))
+sh.refresh_ticks(b7, market7)
+quiet(sh.run_polls, b7, market7, 200, refresh=False)
+disk7 = json.load(open(os.path.join(wd7, "bot_state_v12.json")))
+ok((disk7.get("_continuity_export_txn") or {}).get("stage") == "PREPARED"
+   and "_post_hit_catchup" not in disk7,
+   "a fast pass PREPARES continuity at completion (never audit-locked)")
+b8, fake8, market8, broker8, _ = sh.boot(["--export-continuity"],
+                                         workdir=wd7)
+b8._TEST_TARGET_HIT_EXPORT_MAX_POLLS = 80
+b8._TEST_TARGET_HIT_EXPORT_POLL_HOOK = lambda poll, stx: time.sleep(0.05)
+fake8.account.balance = fake7.account.balance
+fake8.deals = list(fake7.deals)
+fake8.history_orders = list(fake7.history_orders)
+market8.sessions = list(market7.sessions)
+market8.closes = {sym: list(vals) for sym, vals in market7.closes.items()}
+market8.rebuild()
+market8.grow()
+last8 = market8.sessions[-1]
+sh.set_clock(b8, datetime(last8.year, last8.month, last8.day, 17, 20,
+                          tzinfo=sh.NY).astimezone(timezone.utc))
+code8 = quiet(sh.run_polls, b8, market8, 80)
+ok(code8 == 0 and os.path.exists(b8.CONTINUITY_FILE),
+   f"the fast pass EXPORTS its continuity (exit {code8})")
+b9, fake9, market9, broker9, wd9 = sh.boot(P2_GATED)
+shutil.copy(b8.CONTINUITY_FILE, os.path.join(wd9, "shadow_continuity.json"))
+fake9.account.balance = 200000.0
+market9.sessions = list(market8.sessions)
+market9.closes = {sym: list(vals) for sym, vals in market8.closes.items()}
+market9.rebuild()
+last9 = market9.sessions[-1]
+sh.set_clock(b9, datetime(last9.year, last9.month, last9.day, 17, 30,
+                          tzinfo=sh.NY).astimezone(timezone.utc))
+quiet(sh.run_polls, b9, market9, 12)
+st9 = b9._RUNTIME_STATE[0]
+ok(((st9 or {}).get("_lifecycle_binding") or {}).get("recipe") == "p2-fresh"
+   and bool(((st9 or {}).get("_lifecycle_binding") or {})
+            .get("continuity_sha256"))
+   and len(fake9.sent) == 0,
+   "P1->P2 gated continuity WORKS for the fast pass (sealed, zero sends)")
+
 print(f"test_continuity_chain: {PASS[0]} pass, {FAIL[0]} fail")
 sys.exit(1 if FAIL[0] else 0)

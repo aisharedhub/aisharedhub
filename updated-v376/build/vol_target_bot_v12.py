@@ -869,7 +869,7 @@ RESUME_PAUSED_CMD = RELEASE_RECIPE_ID == "resume"
 FLATTEN_AND_STOP = RELEASE_RECIPE_ID == "flatten-stop"
 ASSUME_YES = bool((_DIRECT_PROFILE or {}).get("assume_yes"))
 V376_P1_PATH_PINNED = False
-BOT_BUILD = "v3.9.2-updated-v376"
+BOT_BUILD = "v3.9.3-updated-v376"
 
 if MODE not in MODES:
     print(f"--mode must be one of {list(MODES)}"); sys.exit(1)
@@ -9907,6 +9907,40 @@ def _qualified_independent_unauthorized_rows(snapshot, parts):
     return tuple(row for row in unauthorized if row not in bot_rows)
 
 
+def _cashflow_incident_context(st):
+    """The state context the V386/V389 cashflow exception evaluates against.
+
+    Before the one-time r4 migration the live records ARE the context.
+    After the migration COMMITTED, the exact takeover / capital-transition /
+    source-binding receipts live inside the migration's hash-sealed archive;
+    the exception keeps its authority by evaluating a DETACHED view of those
+    receipts (verified against the committed record's archive digest and
+    receipt) — never by resurrecting the records into live state.  Without
+    this, the very histories that qualified under the exception pre-commit
+    would become CASHFLOW UNKNOWN forever the moment the migration archives
+    its sources."""
+    if not isinstance(st, dict):
+        return None
+    if "_predecessor_takeover" in st:
+        return st
+    record = st.get("_r4_migration")
+    if (not isinstance(record, dict)
+            or record.get("stage") != "COMMITTED"
+            or not _valid_r4_migration(record, st)):
+        return None
+    archive = record.get("archive")
+    if (not isinstance(archive, dict)
+            or _state_body_digest(archive) != record.get("archive_sha256")):
+        return None
+    view = dict(st)
+    view.pop("_r4_migration", None)
+    view["_lifecycle_binding"] = archive.get("source_binding")
+    view["_predecessor_takeover"] = archive.get("predecessor_takeover")
+    view["_v389_capital_transition"] = archive.get("capital_transition")
+    view["_v389_takeover_ledger_bridge"] = archive.get("ledger_bridge")
+    return view
+
+
 def _qualified_cashflow_exact_incident_shape(st):
     """Recognize only the four-sleeve P2 state family observed in V386."""
     if not isinstance(st, dict):
@@ -11025,9 +11059,15 @@ def _v389_initial_funding_rows_only(st, snapshot):
 
 
 def _v389_legacy_cashflow_monitor_profile(st, guard):
-    """Identify only the sealed $200k immediate-P2 V386 incident family."""
+    """Identify only the sealed $200k immediate-P2 V386 incident family.
+
+    Evaluated against _cashflow_incident_context: after the one-time r4
+    migration commits, the sealed receipts are read from the migration's
+    hash-verified archive so the SAME broker history that qualified before
+    the commit keeps qualifying after it."""
     empty_sha = _continuity_hash([])
-    if (not isinstance(st, dict) or not isinstance(guard, dict)
+    ctx = _cashflow_incident_context(st)
+    if (ctx is None or not isinstance(guard, dict)
             or guard.get("schema") != _EXTERNAL_CASHFLOW_GUARD_SCHEMA
             or guard.get("external_count") != 0
             or guard.get("external_sha256") != empty_sha
@@ -11035,11 +11075,11 @@ def _v389_legacy_cashflow_monitor_profile(st, guard):
             or guard.get("unauthorized_trade_sha256") != empty_sha
             or guard.get("baseline_credit_cents") != 0
             or guard.get("baseline_history_cash_cents") != 0
-            or not _qualified_cashflow_exact_incident_shape(st)):
+            or not _qualified_cashflow_exact_incident_shape(ctx)):
         return False
-    txn = st.get("_predecessor_takeover")
-    transition = st.get("_v389_capital_transition")
-    binding = st.get("_lifecycle_binding")
+    txn = ctx.get("_predecessor_takeover")
+    transition = ctx.get("_v389_capital_transition")
+    binding = ctx.get("_lifecycle_binding")
     return bool(
         _valid_lifecycle_binding(binding)
         and binding.get("stage") == "p2"
@@ -11047,7 +11087,7 @@ def _v389_legacy_cashflow_monitor_profile(st, guard):
         and _binding_entry_policy(binding) == IMMEDIATE_ENTRY_POLICY
         and binding.get("declared_capital_cents") == 20_000_000
         and binding.get("sizing_cents") == 20_000_000
-        and _valid_v389_capital_transition(transition, txn, st)
+        and _valid_v389_capital_transition(transition, txn, ctx)
         and _qualified_current_inventory_is_source_reduction(txn))
 
 
@@ -17311,9 +17351,6 @@ def _continuity_payload(st, _skip_txn_check=False):
         raise ValueError("continuity producer daycount session invalid") from exc
     if not _finite_num(dc.get("last_eq"), positive=True):
         raise ValueError("continuity producer daycount equity invalid")
-    if not _window_live_proven(st):
-        raise ValueError("window provenance is not 20 dated live-account "
-                         "observations (seed/backfill material remains)")
     sh = copy.deepcopy(st.get("shadow"))
     if not isinstance(sh, dict) or not sh.get("backfilled"):
         raise ValueError("shadow ledger is not complete/backfilled")
@@ -17474,12 +17511,12 @@ def _window_live_proven(st):
     """True when the CURRENT 20-observation window derives entirely from
     dated live-account ledger rows.
 
-    The process-wide repaired-from-seed latch is deliberately blunt: a
-    virgin first start installs the pinned seed and latches for the whole
-    process life, even after every seed row has been displaced by proven
-    live observations.  Exporting continuity is legitimate exactly when the
-    window's own dated provenance shows no seed/backfill material remains —
-    proven from the ledger, never from a process flag."""
+    Diagnostic provenance helper.  Continuity export does NOT require an
+    all-live window: the payload carries the complete dated ledger with
+    per-row provenance and both producer and adopter prove the windows
+    against it, so a mixed seed/live window travels honestly (a fast
+    challenge pass legitimately completes in fewer than 20 live
+    sessions).  Nothing is ever relabeled as live."""
     try:
         ledger = st.get("_controller_ledger") if isinstance(st, dict) else None
         if not _valid_controller_ledger(ledger):
@@ -17673,8 +17710,7 @@ def _continuity_economic_state_hash(st):
 
 def _continuity_export_baseline(st, origin_session):
     """Freeze every economic input needed to prove one terminal fold."""
-    if (not isinstance(st, dict) or not _continuity_history_frontier_ok(st)
-            or not _window_live_proven(st)):
+    if not isinstance(st, dict) or not _continuity_history_frontier_ok(st):
         return None
     dc = st.get("_daycount"); sh = st.get("shadow")
     if (not isinstance(dc, dict) or set(dc) != {"session", "last_eq"}
@@ -18574,10 +18610,9 @@ def _export_continuity(st, path=None):
         log("*** continuity export refused: account-wide flat/cash sandwich "
             "could not be proved")
         return False
-    if (not _window_live_proven(st)
-            or not _continuity_history_frontier_ok(st)):
-        log("*** continuity export refused: exact live 20-session return/dip "
-            "history is unavailable or was repaired from seed this boot")
+    if not _continuity_history_frontier_ok(st):
+        log("*** continuity export refused: the exact 20-session return/dip "
+            "window is unavailable or incoherent")
         return False
     blockers = ("_order_intent", "_close_intent", "_target_flat_watch",
                 "_close_only_halt")
@@ -34230,9 +34265,8 @@ def _service_target_flat_watch(st, start_bal):
                 # export command reconstructs its handoff under full proofs
                 # (_bootstrap_missing_post_hit_handoff).  Deferral is legal
                 # ONLY when that reconstruction is provably possible right
-                # now — the export baseline itself must be constructible
-                # (which requires the 20-window fully live-proven).  Any
-                # other shape receives the permanent audit marker: a
+                # now — the export baseline itself must be constructible.
+                # Any other shape receives the permanent audit marker: a
                 # completion that can never export must say so loudly, and
                 # only a transient constructor failure on an exportable
                 # shape is deferred.
@@ -35277,6 +35311,7 @@ _R4_MIGRATION_KEYS = frozenset({
     "schema", "stage", "login", "server", "source_binding_sha256",
     "source_authority_sha256", "takeover_sha256", "bridge_receipt_sha256",
     "guard_sha256", "inventory_sha256", "ledger_sha256",
+    "start_balance_cents",
     "merged_clock_hold_dip", "new_binding_sha256", "archive",
     "archive_sha256", "receipt_sha256", "created_at"})
 
@@ -35308,6 +35343,10 @@ def _valid_r4_migration(value, st=None):
                     "guard_sha256"):
             if not _lower_hex64(value.get(key)):
                 return False
+        start_bal = value.get("start_balance_cents")
+        if (isinstance(start_bal, bool) or not isinstance(start_bal, int)
+                or start_bal <= 0):
+            return False
         if value.get("source_authority_sha256") != \
                 _V389_R4_DIRECT_AUTHORITY_SHA256:
             return False
@@ -35608,10 +35647,19 @@ def _r4_rebuild_controller_ledger(st):
 
 def _r4_new_migration_record(st):
     binding = st["_lifecycle_binding"]
-    try:
-        wall = time.time()
-    except Exception:
-        wall = 1.0
+    ai = _verified_account_info("r4 migration prepare balance")
+    balance_cents = None
+    if ai is not None and _finite_num(getattr(ai, "balance", None),
+                                      positive=True):
+        balance_cents = int(round(float(ai.balance) * 100.0))
+    if not isinstance(balance_cents, int) or balance_cents <= 0:
+        return None
+    wall = globals().get("_TEST_WALL_TS")
+    if wall is None:
+        try:
+            wall = time.time()
+        except Exception:
+            wall = 1.0
     return {
         "schema": _R4_MIGRATION_SCHEMA, "stage": "PREPARED",
         "login": binding["login"], "server": binding["server"],
@@ -35622,6 +35670,7 @@ def _r4_new_migration_record(st):
         "bridge_receipt_sha256":
             st["_v389_takeover_ledger_bridge"]["receipt_sha256"],
         "guard_sha256": _state_body_digest(st["_external_cashflow_guard"]),
+        "start_balance_cents": balance_cents,
         "inventory_sha256": None, "ledger_sha256": None,
         "merged_clock_hold_dip": None,
         "new_binding_sha256": None, "archive": None, "archive_sha256": None,
@@ -35644,11 +35693,62 @@ def _r4_commit_migration(st):
         log("*** r4 migration: final pre-commit inventory reproof failed — "
             "commit refused; custody rails keep the account under watch")
         return False
-    prior_sha = (st.get("_r4_migration") or {}).get("inventory_sha256")
+    record0 = st.get("_r4_migration") or {}
+    prior_sha = record0.get("inventory_sha256")
     if reproof != prior_sha:
         log("  [r4] pre-commit inventory reproof differs from "
             "INVENTORY_PROVED (reductions since the proof) — remapped "
             "cleanly, commit proceeds on the reproved book")
+    # Cash/deal-history reproof: the CURRENT verified balance must be
+    # explained EXACTLY by the PREPARED-time verified balance plus the
+    # cash of bot-owned deals inside the migration window.  Any foreign,
+    # manual or balance/credit row in that window — or a single
+    # unexplained cent — refuses the commit; custody rails continue.
+    ai_cash = _verified_account_info("r4 commit cash reproof")
+    if (ai_cash is None
+            or not _finite_num(getattr(ai_cash, "balance", None),
+                               positive=True)):
+        log("*** r4 migration: commit cash witness unavailable — commit "
+            "refused this poll")
+        return False
+    balance_now = int(round(float(ai_cash.balance) * 100.0))
+    wall_now = globals().get("_TEST_WALL_TS")
+    if wall_now is None:
+        wall_now = time.time()
+    span_start = float(record0.get("created_at", 1.0)) - 60.0
+    try:
+        span_rows = mt5.history_deals_get(
+            datetime.fromtimestamp(max(span_start, 1.0), tz=timezone.utc),
+            datetime.fromtimestamp(float(wall_now) + 60.0, tz=timezone.utc))
+    except Exception:
+        span_rows = None
+    if span_rows is None:
+        log("*** r4 migration: migration-window deal history unreadable — "
+            "commit refused this poll")
+        return False
+    owned_magics = set(MAGIC.values())
+    owned_ids = {row.get("identifier")
+                 for row in (st.get("_predecessor_takeover") or {})
+                     .get("positions", []) if isinstance(row, dict)}
+    cash_cents = 0
+    for row in span_rows:
+        row_magic = getattr(row, "magic", None)
+        row_position = getattr(row, "position_id", None)
+        if row_magic not in owned_magics and row_position not in owned_ids:
+            log(f"*** r4 migration: foreign/manual/balance deal "
+                f"{getattr(row, 'ticket', '?')} inside the migration window "
+                "— commit refused (cash/history reproof)")
+            return False
+        for field in ("profit", "commission", "swap", "fee"):
+            value = getattr(row, field, 0.0)
+            if _finite_num(value):
+                cash_cents += int(round(float(value) * 100.0))
+    expected_now = int(record0.get("start_balance_cents", 0)) + cash_cents
+    if balance_now != expected_now:
+        log(f"*** r4 migration: account balance {balance_now} differs from "
+            f"the PREPARED-time balance plus owned-deal cash "
+            f"({expected_now}) — commit refused (cash/history reproof)")
+        return False
     work = copy.deepcopy(st)
     record = work.get("_r4_migration")
     binding = work.get("_lifecycle_binding")
@@ -35804,6 +35904,8 @@ def _advance_r4_migration(st):
     record = st.get("_r4_migration")
     if record is None:
         record = _r4_new_migration_record(st)
+        if record is None:
+            return "wait"          # balance witness unavailable this poll
         if not _valid_r4_migration(record, st):
             return "refused"
         work = copy.deepcopy(st)

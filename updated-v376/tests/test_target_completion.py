@@ -87,8 +87,10 @@ ok("_target_hit" in disk and "_target_hit" in bak,
    "TARGET HIT committed to BOTH recovery images")
 _phc = disk.get("_post_hit_catchup") or {}
 ok(_phc.get("stage") == "AUDIT_REQUIRED",
-   f"an early hit (window not yet 20 live sessions) is LOUDLY classified "
-   f"audit-required, never silently deferred ({_phc.get('stage')})")
+   f"a hit before ANY completed live session is LOUDLY classified "
+   f"audit-required, never silently deferred ({_phc.get('stage')}); "
+   f"fast passes with completed sessions PREPARE instead — proved in "
+   f"test_continuity_chain")
 ok(code == 0 or code is None,
    f"completion path exits cleanly or holds its final watch ({code})")
 

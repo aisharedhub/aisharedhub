@@ -255,6 +255,87 @@ out8e = b8d._advance_r4_migration(st8d)
 ok(out8e == "committed",
    "the split-row refusal clears once the book is unambiguous again")
 
+
+def _qualify_epoch(bx):
+    wall = r4harness.SCENARIO_WALL
+    bx._UTC_EPOCH_QUALIFIED[0] = True
+    bx._HEALTH_BAD[0] = False
+    bx._UTC_EPOCH_WITNESS[0] = {
+        "mode": "raw-utc", "offset_s": 0, "health_status": "ok",
+        "poll_total": int(bx._POLL_TOTAL[0]), "wall_epoch": wall,
+        "max_delta_s": 2.0,
+        "ticks": {"US100.sim": wall - 2.0, "XAUUSD.sim": wall - 2.0,
+                  "BTCUSD.sim": wall - 2.0}}
+
+
+# ---- the V389 cashflow exception SURVIVES the commit's archive ----
+# The real account's disordered OANDA backfill fails V386's complete-history
+# cash equation; only the V389 monitor keeps it tradable.  That authority
+# must not vanish when the migration archives the takeover records.
+b9c, fake9c, st9c, _ = r4harness.boot()
+_qualify_epoch(b9c)
+fake9c.account.balance = round(fake9c.account.balance + 1.00, 2)
+fake9c.account.equity = round(fake9c.account.equity + 1.00, 2)
+pre9c = b9c._external_cashflow_guard_status(st9c)
+ok(pre9c == "clear",
+   f"pre-commit: the V389 exception clears the disordered history ({pre9c})")
+for _ in range(4):
+    b9c._advance_r4_migration(st9c)
+ok((st9c.get("_r4_migration") or {}).get("stage") == "COMMITTED",
+   "migration commits under the disordered-history shape")
+b9c._EXTERNAL_CASHFLOW_UNKNOWN[0] = False
+post9c = b9c._external_cashflow_guard_status(st9c)
+ok(post9c == "clear" and not b9c._EXTERNAL_CASHFLOW_UNKNOWN[0],
+   f"post-commit: the exception SURVIVES the archived takeover ({post9c})")
+# control: WITHOUT the archived-context view the same history goes UNKNOWN,
+# proving the view is exactly what preserves the account's tradability
+orig_ctx = b9c._cashflow_incident_context
+b9c._cashflow_incident_context = (
+    lambda s: s if isinstance(s, dict) and "_predecessor_takeover" in s
+    else None)
+b9c._EXTERNAL_CASHFLOW_UNKNOWN[0] = False
+blind9c = b9c._external_cashflow_guard_status(st9c)
+ok(blind9c != "clear",
+   f"control: without the archive view the history is unexplainable "
+   f"({blind9c})")
+b9c._cashflow_incident_context = orig_ctx
+
+# ---- a $1,000 balance change after LEDGER_REBUILT refuses the commit ----
+b9d, fake9d, st9d, _ = r4harness.boot()
+for _ in range(3):
+    b9d._advance_r4_migration(st9d)
+assert st9d["_r4_migration"]["stage"] == "LEDGER_REBUILT"
+fake9d.account.balance = round(fake9d.account.balance + 1000.00, 2)
+fake9d.account.equity = round(fake9d.account.equity + 1000.00, 2)
+out9d = b9d._advance_r4_migration(st9d)
+ok(out9d == "wait"
+   and st9d["_r4_migration"]["stage"] == "LEDGER_REBUILT",
+   f"an unexplained $1,000 balance change refuses the commit ({out9d})")
+fake9d.account.balance = round(fake9d.account.balance - 1000.00, 2)
+fake9d.account.equity = round(fake9d.account.equity - 1000.00, 2)
+ok(b9d._advance_r4_migration(st9d) == "committed",
+   "the cash refusal clears once the balance is explained again")
+
+# ---- a manual deal inside the migration window refuses the commit ----
+b9e, fake9e, st9e, _ = r4harness.boot()
+for _ in range(3):
+    b9e._advance_r4_migration(st9e)
+assert st9e["_r4_migration"]["stage"] == "LEDGER_REBUILT"
+manual = fakemt5._Obj(
+    ticket=777001, order=777001, position_id=777001, magic=0,
+    symbol="XAUUSD.sim", volume=0.05, type=0, entry=0,
+    profit=0.0, commission=0.0, swap=0.0, fee=0.0,
+    time=r4harness.SCENARIO_WALL + 5.0, comment="manual")
+fake9e.deals.append(manual)
+out9e = b9e._advance_r4_migration(st9e)
+ok(out9e == "wait"
+   and st9e["_r4_migration"]["stage"] == "LEDGER_REBUILT",
+   f"a manual XAU deal inside the migration window refuses the commit "
+   f"({out9e})")
+fake9e.deals.remove(manual)
+ok(b9e._advance_r4_migration(st9e) == "committed",
+   "the manual-deal refusal clears once the window history is pure again")
+
 # a MID-TAKEOVER source is held fail-closed, never migrated.  (The real
 # supplied state is COMMITTED/COMMITTED/PROVED with the ledger bridge
 # present; this SYNTHESIZED variant flips only those markers to prove
