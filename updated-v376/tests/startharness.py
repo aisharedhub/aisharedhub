@@ -178,13 +178,20 @@ class ExecBroker:
         comment = req.get("comment", "")
         buy = req.get("type") == fake.ORDER_TYPE_BUY
         now = self._now()
+        profit = 0.0
         if "position" in req:                      # exact-ticket close/reduce
             pos_id = req["position"]
             for p in list(fake.positions):
                 if p.ticket == pos_id:
+                    contract = fakemt5.DEFAULT_SPECS[p.symbol][
+                        "trade_contract_size"]
+                    side = 1.0 if p.type == fake.POSITION_TYPE_BUY else -1.0
+                    profit = round(
+                        (price - p.price_open) * side * contract * volume, 2)
                     p.volume = round(p.volume - volume, 8)
                     if p.volume <= 1e-9:
                         fake.positions.remove(p)
+            fake.account.balance = round(fake.account.balance + profit, 2)
             entry = fake.DEAL_ENTRY_OUT
             position_id = pos_id
         else:                                      # new exposure
@@ -194,14 +201,16 @@ class ExecBroker:
                 symbol=symbol, volume=volume,
                 type=(fake.POSITION_TYPE_BUY if buy
                       else fake.POSITION_TYPE_SELL),
-                price_open=price, time=now))
+                price_open=price, time=now,
+                sl=float(req.get("sl", 0.0) or 0.0),
+                tp=float(req.get("tp", 0.0) or 0.0)))
             entry = fake.DEAL_ENTRY_IN
         fake.deals.append(fakemt5._Obj(
             ticket=deal_id, order=order_id, position_id=position_id,
             magic=magic, symbol=symbol,
             type=(fake.DEAL_TYPE_BUY if buy else fake.DEAL_TYPE_SELL),
             entry=entry, time=now, time_msc=now * 1000, volume=volume,
-            price=price, comment=comment, profit=0.0, commission=0.0,
+            price=price, comment=comment, profit=profit, commission=0.0,
             swap=0.0, fee=0.0))
         fake.history_orders.append(fakemt5._Obj(
             ticket=order_id, magic=magic, symbol=symbol, comment=comment,
@@ -295,6 +304,23 @@ def boot(argv, workdir=None, balance=200000.0):
         # like real polling cadence, so advancing-tick proofs can mature
         wall = float(b._TEST_WALL_TS) + 2.0
         now_utc = datetime.fromtimestamp(wall, tz=timezone.utc)
+        # broker-consistent marks: equity = balance + floating P/L
+        floating = 0.0
+        try:
+            for p in fake.positions:
+                tick = fake.ticks.get(p.symbol)
+                if tick is None:
+                    continue
+                mark = tick.bid if p.type == fake.POSITION_TYPE_BUY \
+                    else tick.ask
+                side = 1.0 if p.type == fake.POSITION_TYPE_BUY else -1.0
+                contract = fakemt5.DEFAULT_SPECS[p.symbol][
+                    "trade_contract_size"]
+                floating += (mark - p.price_open) * side * contract * p.volume
+            fake.account.equity = round(fake.account.balance + floating, 2)
+            fake.account.margin_free = fake.account.equity
+        except Exception:
+            pass
         b._TEST_WALL_TS = wall
         b._TEST_NOW_UTC = now_utc
         b._TEST_NOW_NY = now_utc.astimezone(NY)
@@ -328,9 +354,10 @@ def boot(argv, workdir=None, balance=200000.0):
     return b, fake, market, broker, workdir
 
 
-def run_polls(b, market, polls):
+def run_polls(b, market, polls, refresh=True):
     """Run _main_impl until `polls` more poll iterations complete."""
-    refresh_ticks(b, market)
+    if refresh:
+        refresh_ticks(b, market)
     b._time_feed_health_check("pre-run")
     b._TEST_MAIN_MAX_POLLS = int(b._POLL_TOTAL[0]) + int(polls)
     code = None
@@ -346,3 +373,23 @@ def state_on_disk(b):
         return json.load(open(b.STATE_FILE))
     except Exception:
         return None
+
+
+def drive_to_authorized(b, market, run=run_polls):
+    """Monday bind -> NY17 roll -> Prague anchor: a fully authorized live
+    process with both ledgers on session 2026-09-01 (before any entry)."""
+    run(b, market, 6)
+    set_clock(b, datetime(2026, 8, 31, 21, 0, 30, tzinfo=timezone.utc))
+    run(b, market, 3)
+    set_clock(b, datetime(2026, 8, 31, 21, 5, 0, tzinfo=timezone.utc))
+    market.grow()
+    run(b, market, 6)
+    set_clock(b, datetime(2026, 8, 31, 22, 0, 20, tzinfo=timezone.utc))
+    run(b, market, 6)
+    st = b._RUNTIME_STATE[0]
+    dc = (st.get("_daycount") or {}).get("session")
+    sh_sess = (st.get("shadow") or {}).get("session")
+    cold = (st.get("breaker") or {}).get("cold_start")
+    assert dc == sh_sess == "2026-09-01" and cold is False, (
+        dc, sh_sess, cold)
+    return st
