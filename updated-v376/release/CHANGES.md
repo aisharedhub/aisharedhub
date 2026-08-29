@@ -260,6 +260,40 @@ repairs were themselves incomplete, plus latent gaps; all fixed:
   a hypothetical old-format step record fails closed as a WAIT, never
   silently passes.
 
+## 15. v3.9.3 — post-commit cashflow survival, commit cash reproof, fast passes
+
+Independent testing of v3.9.2 found three release blockers; all
+verified real and repaired:
+
+* **The V389 cashflow exception now survives the migration commit.**
+  The exception's profile required a LIVE `_predecessor_takeover`, but
+  the commit archives that record — so the exact broker history that
+  qualified before the commit (the real account's disordered OANDA
+  backfill, which V386's complete-history cash equation cannot explain)
+  became CASHFLOW UNKNOWN forever after the handoff.
+  `_cashflow_incident_context` now evaluates the exception against the
+  committed migration's receipt-verified archive: the same history
+  clears identically before and after the commit, proven by a suite
+  case with a disordered-history shape plus a control showing the
+  archive view is exactly what preserves tradability.
+* **The commit re-proves cash and deal history, not just tickets.**
+  The migration record captures the PREPARED-time verified balance;
+  the commit requires the CURRENT verified balance to equal it plus
+  the cash of bot-owned deals inside the migration window. An
+  unexplained $1,000 balance change or a manual deal after
+  LEDGER_REBUILT now refuses the commit (both suite-proved); custody
+  rail closes remain explained.
+* **Fast challenge passes continue (v3.9.2 regression).** The
+  all-live-window export requirement audit-locked any completion
+  before 20 live sessions — a real P1 pass takes ~13. The continuity
+  payload has always carried the complete dated ledger with per-row
+  provenance, and BOTH producer and adopter prove the windows against
+  it, so a mixed seed/live window travels honestly. The export gates
+  now rest on that dated-ledger proof; nothing is relabeled as live; a
+  fast pass PREPARES at completion, exports, and is adopted by a fresh
+  P2-gated folder (suite-proved end-to-end). A hit before ANY
+  completed live session still audit-locks loudly.
+
 ## Retained unchanged
 
 The complete V389 safety engine: crash-safe double-image state with

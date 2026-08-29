@@ -148,3 +148,18 @@ constructor failure at an exportable hit → clean deferral → the export
 command reconstructs under the binding recipe and writes the artifact),
 the loud early-hit audit classification, and the duplicate-row refusal.
 The full battery for the v3.9.2 build is recorded in TEST-RESULTS.md.
+
+---
+
+# Round 4 — v3.9.2 release blockers (→ v3.9.3)
+
+Independent testing of v3.9.2 reported three release blockers. All
+three were verified REAL and are repaired in v3.9.3:
+
+| Claim | Verdict and repair |
+| --- | --- |
+| The r4 cashflow migration breaks after commit: history that passes the V389 exception becomes CASHFLOW UNKNOWN once the takeover records are archived | **TRUE.** The exception's profile required a LIVE takeover record; the commit pops it into the archive, and ownership fell back to V386's complete-history cash equation — which the real account's disordered OANDA backfill can never satisfy. `_cashflow_incident_context` now evaluates the exception against the commit's receipt-verified archive: the same history clears identically before and after (suite-proved with a disordered-history shape plus a no-archive control). |
+| The final migration proof accepts cash/history changes ($1,000 balance change; manual XAU deal after LEDGER_REBUILT still committed) | **TRUE.** The v3.9.2 sandwich proved read-stability only. The record now captures the PREPARED-time verified balance and the commit requires the current verified balance to equal it plus the cash of bot-owned deals inside the migration window; both attacks now refuse the commit (suite-proved) and clear once the account is explained again. |
+| Fast challenge passes cannot continue: a target before 20 live sessions becomes permanently AUDIT_REQUIRED (the operator's real P1 took ~13 sessions) | **TRUE — a v3.9.2 regression.** The continuity payload has always carried the complete dated ledger with per-row provenance, proven by both producer and adopter, so a mixed seed/live window travels honestly. The export gates now rest on that dated-ledger proof; a fast pass PREPARES at completion, exports, and is adopted (suite-proved end-to-end). A hit before ANY completed live session still audit-locks loudly. |
+| While migration waits, only hard-loss flattening operates | Accurate, by design, and documented since v3.9.1: strategy servicing requires the rebuilt dated ledger and begins at COMMITTED (normally seconds); the wait services the source's hard-loss custody rails and inherited broker-side protections. |
+| Three migration checks are unconditional no-ops | Hunted by a dedicated adversarial review (three hunters, two refuters per finding) — results recorded below/in CHANGES for whatever survives verification. |
