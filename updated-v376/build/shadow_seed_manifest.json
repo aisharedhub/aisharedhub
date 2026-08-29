@@ -1,0 +1,82 @@
+{
+  "authority_decision": "USE_3713_DATA",
+  "authority_decision_date": "2026-08-25",
+  "authority_scope": "SHADOW_SEED_DATA_PLUS_USER_OANDA_M5_EXTENSION",
+  "extension_append_oracle_sha256": "c950fa5507c7fa135117ed240a1e50bdbaa5f263b686e414e20a9a2ab1196190",
+  "extension_boundary_overlap_exact_rows": {
+    "btc": 50,
+    "nas": 52,
+    "xau": 46
+  },
+  "extension_first_session": "2026-07-29",
+  "extension_input_bundle_sha256": "1b35aba6140fffd1999554d08e67d7c922e983016e8d6deaa22b49e0afaafb92",
+  "extension_input_file_bytes": {
+    "OANDA_BTCUSD, 5_f2dd5.csv": 1013299,
+    "OANDA_NAS100USD, 5_9675e.csv": 1067171,
+    "OANDA_XAUUSD, 5_fc3a1.csv": 1012901
+  },
+  "extension_input_files": {
+    "OANDA_BTCUSD, 5_f2dd5.csv": "d5a1bd64f321890be33dc6d45dfd687a5692777afaa9e0d4b1c93aad27c82107",
+    "OANDA_NAS100USD, 5_9675e.csv": "6f0cbd7a61d003def7e19aff60db93d5ef505b6f1af37b0edaafc944467070ec",
+    "OANDA_XAUUSD, 5_fc3a1.csv": "ff8f20422a158df4dc3544d9021b6e215982adaf2390660456c1ff9b00618855"
+  },
+  "extension_last_session": "2026-08-07",
+  "extension_later_session_witness": "2026-08-10",
+  "extension_orb_exact_rows": 8,
+  "extension_orb_reasons": {
+    "2026-07-29": "complete-regular-grid",
+    "2026-07-30": "complete-regular-grid",
+    "2026-07-31": "complete-regular-grid",
+    "2026-08-03": "complete-regular-grid",
+    "2026-08-04": "complete-regular-grid",
+    "2026-08-05": "complete-regular-grid",
+    "2026-08-06": "complete-regular-grid",
+    "2026-08-07": "complete-regular-grid"
+  },
+  "extension_row_count": 8,
+  "first_session": "2006-03-20",
+  "full_input_sha256": "eed8e4bb6370bc5040d0e1a011a4242607b4a391c1fdfbe6135fdf8a434e039a",
+  "full_recent_overlap_end": "2026-06-29",
+  "full_recent_overlap_exact_rows": 279,
+  "full_recent_overlap_start": "2025-06-02",
+  "last_equity_hex": "0x1.557dc7889cf70p+1",
+  "last_peak_hex": "0x1.5769e797e331ap+1",
+  "last_peak_session": "2026-06-18",
+  "last_session": "2026-08-07",
+  "oracle_input_sha256": "0460c7efaeb5d391c4ff6397c259a0460784f8f2b92e5f03f63cfee93ba7e371",
+  "oracle_return_array_sha256": "1b08a66b2476c81612975a7400d75f1954b1a3a9b48902d9119f2b663a1708c5",
+  "oracle_tail_material_tolerance": 1e-15,
+  "oracle_tail_max_abs_return_difference": 0.0003561462991371032,
+  "oracle_tail_overlap_end": "2026-07-10",
+  "oracle_tail_overlap_exact_rows": 280,
+  "oracle_tail_overlap_revised_rows": 8,
+  "oracle_tail_overlap_start": "2025-06-02",
+  "oracle_tail_revised_sessions": [
+    "2026-07-01",
+    "2026-07-02",
+    "2026-07-03",
+    "2026-07-06",
+    "2026-07-07",
+    "2026-07-08",
+    "2026-07-09",
+    "2026-07-10"
+  ],
+  "parent_manifest_sha256": "27076b8c5a7fc62a324783fec9e9b27b5803825c617ef3c984ae18fa39e9b7cc",
+  "parent_row_count": 5262,
+  "parent_seed_sha256": "027d8827706b50cb9d732b547c94e1223d67aeca4ea748a7ca6a54cc23af27de",
+  "recent_input_sha256": "81b2c534531fc25c5947daa166a635913b9d8a5641d17b68a4e9dd8030d628a4",
+  "release_authority_status": "USER_AUTHORIZED_V383_OANDA_M5_EXTENSION",
+  "row_count": 5270,
+  "schema": "v383_shadow_manifest/1",
+  "seed_file": "shadow_seed.json",
+  "seed_sha256": "c4fd49e59d8a1d3e51672b6de724d680f32f801f79807512ae8ad7c5a8f385ad",
+  "strategy_config_sha256": "d6b9ff8ada64ebb7d70745e4e9731bb000689fb5cbcf8f213519ab8b80b329fa",
+  "strategy_weights": {
+    "BTC": 0.2,
+    "ORB": 0.4,
+    "S8V": 0.1,
+    "XAUB": 0.05,
+    "XAUM": 0.1
+  },
+  "tail_authority": "v3713-revised-canonical+user-oanda-m5-through-2026-08-07"
+}

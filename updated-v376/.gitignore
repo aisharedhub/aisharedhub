@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+bot_state_v12.json
+bot_state_v12.json.*
+shadow_continuity.json
+*.zip
