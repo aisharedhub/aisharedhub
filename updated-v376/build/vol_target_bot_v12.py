@@ -2019,7 +2019,8 @@ _V383_LIFECYCLE_BINDING_SCHEMA = "direct_lifecycle_binding/6"
 _V384_LIFECYCLE_BINDING_SCHEMA = "direct_lifecycle_binding/7"
 _V385_LIFECYCLE_BINDING_SCHEMA = "direct_lifecycle_binding/8"
 _V386_LIFECYCLE_BINDING_SCHEMA = "direct_lifecycle_binding/9"
-_LIFECYCLE_BINDING_SCHEMA = "direct_lifecycle_binding/10"
+_V389_LIFECYCLE_BINDING_SCHEMA = "direct_lifecycle_binding/10"
+_LIFECYCLE_BINDING_SCHEMA = "direct_lifecycle_binding/11"
 _V381_GATED_DIRECT_AUTHORITY_SHA256 = (
     "b2063d672103e280fbaf10856392a92144c33660780a78669b6abbad867449f6")
 _V381_IMMEDIATE_DIRECT_AUTHORITY_SHA256 = (
@@ -2037,6 +2038,11 @@ _V385_DIRECT_AUTHORITY_SHA256 = (
     "183e7240e2129a5e42e573141c7989eab828fa4c722cc408f53b32ac4b54222c")
 _V386_DIRECT_AUTHORITY_SHA256 = (
     "3b6acfec99921bfaab0dcaebaf1745373743b1f8a3cbc8cd2260decac64acf2a")
+# Exact authority digest of the sealed V389 r4 recipe payload (the running
+# predecessor of this build).  Recognized ONLY as the source of the one-time
+# r4 migration; it is never live trading authority for this build.
+_V389_R4_DIRECT_AUTHORITY_SHA256 = (
+    "44b17a2faf6f6ff461a3b4c59faf37f2f0136d06cb2e90c815c93bcd32db2b0c")
 _PREDECESSOR_TAKEOVER_SCHEMA = "predecessor_takeover/1"
 _V389_CAPITAL_TRANSITION_SCHEMA = "v389_capital_transition/1"
 _TAKEOVER_APPLIED_SCALE_SCHEMA = "takeover_applied_scale/2"
@@ -3869,7 +3875,7 @@ def _anchor_increase_authorized(st):
     binding = st.get("_lifecycle_binding")
     br = st.get("breaker")
     if not (
-            _valid_lifecycle_binding(binding)
+            _valid_current_lifecycle_binding(binding)
             and binding.get("anchor_risk_policy") == _ANCHOR_RISK_POLICY
             and isinstance(br, dict)
             and br.get("cold_start") is False
@@ -4480,6 +4486,7 @@ def _valid_lifecycle_binding_for_schema(value, schema):
         _V384_LIFECYCLE_BINDING_SCHEMA,
         _V385_LIFECYCLE_BINDING_SCHEMA,
         _V386_LIFECYCLE_BINDING_SCHEMA,
+        _V389_LIFECYCLE_BINDING_SCHEMA,
         _LIFECYCLE_BINDING_SCHEMA,
     }
     if policy_schema:
@@ -4487,10 +4494,12 @@ def _valid_lifecycle_binding_for_schema(value, schema):
     if schema in {
             _V385_LIFECYCLE_BINDING_SCHEMA,
             _V386_LIFECYCLE_BINDING_SCHEMA,
+            _V389_LIFECYCLE_BINDING_SCHEMA,
             _LIFECYCLE_BINDING_SCHEMA}:
         keys.add("capital_policy")
     if schema in {
             _V386_LIFECYCLE_BINDING_SCHEMA,
+            _V389_LIFECYCLE_BINDING_SCHEMA,
             _LIFECYCLE_BINDING_SCHEMA}:
         keys.add("anchor_risk_policy")
     if schema in {
@@ -4519,6 +4528,9 @@ def _valid_lifecycle_binding_for_schema(value, schema):
     elif schema == _V386_LIFECYCLE_BINDING_SCHEMA:
         authority_sha256 = _V386_DIRECT_AUTHORITY_SHA256
         allowed_recipes = set(_ENTRY_POLICIES_BY_RECIPE)
+    elif schema == _V389_LIFECYCLE_BINDING_SCHEMA:
+        authority_sha256 = _V389_R4_DIRECT_AUTHORITY_SHA256
+        allowed_recipes = set(_ENTRY_POLICIES_BY_RECIPE)
     elif schema == _LIFECYCLE_BINDING_SCHEMA:
         authority_sha256 = DIRECT_RECIPE_AUTHORITY_SHA256
         allowed_recipes = set(_ENTRY_POLICIES_BY_RECIPE)
@@ -4544,12 +4556,15 @@ def _valid_lifecycle_binding_for_schema(value, schema):
             and value.get("capital_policy") !=
                 _FULL_VIRTUAL_CAPITAL_POLICY):
         return False
-    if (schema == _LIFECYCLE_BINDING_SCHEMA
+    if (schema in {
+            _V389_LIFECYCLE_BINDING_SCHEMA,
+            _LIFECYCLE_BINDING_SCHEMA}
             and value.get("capital_policy") !=
                 _CAMPAIGN_BASE_CAPITAL_POLICY):
         return False
     if (schema in {
             _V386_LIFECYCLE_BINDING_SCHEMA,
+            _V389_LIFECYCLE_BINDING_SCHEMA,
             _LIFECYCLE_BINDING_SCHEMA}
             and value.get("anchor_risk_policy") != _ANCHOR_RISK_POLICY):
         return False
@@ -4588,8 +4603,9 @@ def _valid_lifecycle_binding_for_schema(value, schema):
             declared is None
             or (observed_valid
                 and observed * 10_000 - declared * 1_000 > 0))
-    elif schema == _LIFECYCLE_BINDING_SCHEMA:
-        # V389's declaration is the literal campaign base.  Its fixed 90%
+    elif schema in {_V389_LIFECYCLE_BINDING_SCHEMA,
+                    _LIFECYCLE_BINDING_SCHEMA}:
+        # The declaration is the literal campaign base.  Its fixed 90%
         # hard floor is independent of the balance observed at attachment.
         declared_within_policy = bool(
             declared_valid
@@ -4615,6 +4631,7 @@ def _valid_lifecycle_binding_for_schema(value, schema):
                 _V384_LIFECYCLE_BINDING_SCHEMA,
                 _V385_LIFECYCLE_BINDING_SCHEMA,
                 _V386_LIFECYCLE_BINDING_SCHEMA,
+                _V389_LIFECYCLE_BINDING_SCHEMA,
                 _LIFECYCLE_BINDING_SCHEMA}:
             if expected is not None:
                 return False
@@ -4654,7 +4671,8 @@ def _valid_lifecycle_binding_for_schema(value, schema):
     return _lower_hex64(continuity_sha)
 
 
-def _valid_lifecycle_binding(value):
+def _valid_current_lifecycle_binding(value):
+    """STRICT: the current /11 binding only — live trading authority."""
     return _valid_lifecycle_binding_for_schema(
         value, _LIFECYCLE_BINDING_SCHEMA)
 
@@ -4694,6 +4712,11 @@ def _valid_v386_lifecycle_binding(value):
         value, _V386_LIFECYCLE_BINDING_SCHEMA)
 
 
+def _valid_v389_lifecycle_binding(value):
+    return _valid_lifecycle_binding_for_schema(
+        value, _V389_LIFECYCLE_BINDING_SCHEMA)
+
+
 def _valid_full_virtual_lifecycle_binding(value):
     return bool(_valid_v386_lifecycle_binding(value)
                 or _valid_v385_lifecycle_binding(value))
@@ -4716,8 +4739,25 @@ def _valid_predecessor_terminal_custody_binding(value):
             and value.get("declared_capital_cents") is None))
 
 
+def _valid_active_lifecycle_binding(value):
+    """The current (/11) binding, or the exact V389 r4 (/10) predecessor.
+
+    The /10 predecessor may hold custody/safety records (they validate and
+    hash against it) but never live trading authority: entry authorization,
+    anchor-increase authorization, fresh-binding creation and resume
+    verification all use _valid_current_lifecycle_binding, and bind/verify
+    refuses to run a /10 lifecycle until the one-time r4 migration commits."""
+    return bool(_valid_current_lifecycle_binding(value)
+                or _valid_v389_lifecycle_binding(value))
+
+
+def _valid_lifecycle_binding(value):
+    """Default binding test for custody/safety records: active semantics."""
+    return _valid_active_lifecycle_binding(value)
+
+
 def _valid_terminal_custody_lifecycle_binding(value):
-    return bool(_valid_lifecycle_binding(value)
+    return bool(_valid_active_lifecycle_binding(value)
                 or _valid_predecessor_terminal_custody_binding(value))
 
 
@@ -4733,6 +4773,7 @@ def _terminal_custody_state_image_identity_bound(obj):
 def _valid_supported_lifecycle_binding(value):
     return bool(
         _valid_lifecycle_binding(value)
+        or _valid_v389_lifecycle_binding(value)
         or _valid_v386_lifecycle_binding(value)
         or _valid_v385_lifecycle_binding(value)
         or _valid_v384_lifecycle_binding(value)
@@ -4746,6 +4787,8 @@ def _valid_supported_lifecycle_binding(value):
 def _binding_entry_policy(value):
     """Return the immutable policy carried/inferred by a supported binding."""
     if _valid_lifecycle_binding(value):
+        return value.get("entry_policy")
+    if _valid_v389_lifecycle_binding(value):
         return value.get("entry_policy")
     if _valid_v386_lifecycle_binding(value):
         return value.get("entry_policy")
@@ -4829,7 +4872,7 @@ def _immediate_entry_authorized(st):
         return False
     binding = st.get("_lifecycle_binding")
     return bool(
-        _valid_lifecycle_binding(binding)
+        _valid_current_lifecycle_binding(binding)
         and _current_state_image_identity_bound(st)
         and binding.get("recipe") == RELEASE_RECIPE_ID
         and binding.get("entry_policy") == IMMEDIATE_ENTRY_POLICY
@@ -10920,7 +10963,7 @@ def _lifecycle_binding_record(stage, continuity_sha256, observed_cents):
         "breaker_bps": rules.get(RELEASE_RECIPE_ID, (None, None))[0],
         "target_bps": rules.get(RELEASE_RECIPE_ID, (None, None))[1],
     }
-    return record if _valid_lifecycle_binding(record) else None
+    return record if _valid_current_lifecycle_binding(record) else None
 
 
 def _direct_observed_balance_cents(where):
@@ -13432,7 +13475,7 @@ def _prepare_virgin_lifecycle_binding(st, economic_ok):
         _refuse_lifecycle(
             "account cash/inventory/history changed after the cashflow "
             "baseline and before first persistence")
-    if (not _valid_lifecycle_binding(st.get("_lifecycle_binding"))
+    if (not _valid_current_lifecycle_binding(st.get("_lifecycle_binding"))
             or not _valid_external_cashflow_guard(
                 st.get("_external_cashflow_guard"), st)
             or not _valid_ledger_bootstrap(st.get("_ledger_bootstrap"), st)
@@ -13460,7 +13503,8 @@ def _verify_loaded_lifecycle_binding(st):
         _valid_predecessor_terminal_custody_binding(binding)
         and isinstance(st, dict)
         and any(key in st for key in _V382_TERMINAL_MIGRATION_KEYS))
-    if not (_valid_lifecycle_binding(binding) or terminal_predecessor):
+    if not (_valid_current_lifecycle_binding(binding)
+            or terminal_predecessor):
         _refuse_lifecycle(
             "loaded state lacks this direct build's exact lifecycle binding")
     if (not terminal_predecessor
@@ -13656,7 +13700,7 @@ def _protect_loaded_before_recipe_check(st):
         # this view on a wrong-policy boot. Terminal predecessor chains were
         # handled above and deliberately cannot enter this active bridge.
         safety_view = st
-        if not _valid_lifecycle_binding(binding):
+        if not _valid_current_lifecycle_binding(binding):
             safety_view = _v382_upgrade_active_binding_candidate(st)
         if (safety_view is None
                 or not _validate_safety_records(
@@ -18909,7 +18953,7 @@ def _continuity_payload(st, _skip_txn_check=False):
         raise ValueError("continuity producer daycount is not exactly settled")
     lifecycle = (st.get("_lifecycle_binding")
                  if isinstance(st, dict) else None)
-    if (_valid_lifecycle_binding(lifecycle)
+    if (_valid_current_lifecycle_binding(lifecycle)
             and lifecycle.get("stage") in {"p1", "p2"}):
         producer_build = BOT_BUILD
         producer_authority = DIRECT_RECIPE_AUTHORITY_SHA256
