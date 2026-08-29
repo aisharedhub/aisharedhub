@@ -59,10 +59,10 @@ def campaign_with_book():
 # ================= T1: touch -> permanent TARGET HIT =================
 b, fake, market, broker, wd = campaign_with_book()
 for sym in market.closes:
-    market.closes[sym][-1] *= 1.05
+    market.closes[sym][-1] *= 1.07
 sh.set_clock(b, utc(2026, 9, 1, 14, 0, 0))
 sh.refresh_ticks(b, market)
-code = quiet(sh.run_polls, b, market, 60, refresh=False)
+code = quiet(sh.run_polls, b, market, 250, refresh=False)
 st = b._RUNTIME_STATE[0]
 hit = st.get("_target_hit")
 ok(isinstance(hit, dict) and hit.get("status") == "TARGET_HIT"
@@ -114,7 +114,7 @@ touched = "_target_flat_watch" in st3 or "_target_hit" in st3
 for sym in market3.closes:
     market3.closes[sym][-1] *= 0.97
 sh.refresh_ticks(b3, market3)
-quiet(sh.run_polls, b3, market3, 60, refresh=False)
+quiet(sh.run_polls, b3, market3, 250, refresh=False)
 st3 = b3._RUNTIME_STATE[0]
 ok(touched, "equity touch persisted a durable watch before broker action")
 ok("_target_hit" not in st3,

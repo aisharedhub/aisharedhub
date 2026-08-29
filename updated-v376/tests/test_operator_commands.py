@@ -195,6 +195,22 @@ ok(not os.path.isfile(b1.PAUSE_REQUEST_FILE)
    "re-pause while paused consumes the request without a rewrite")
 
 # ---- resume applies only after proof ----
+# On the unmigrated r4 folder the pending one-time migration is a
+# STRONGER halt: resume must refuse to clear the pause outright.
+b1._write_operator_request(b1.RESUME_REQUEST_FILE)
+with contextlib.redirect_stdout(io.StringIO()):
+    b1._consume_operator_pause_requests(st1)
+ok("_pause_new_risk" in st1,
+   "resume held while the one-time r4 migration is pending")
+os.path.isfile(b1.RESUME_REQUEST_FILE) and os.remove(
+    b1.RESUME_REQUEST_FILE)
+# Complete the migration; the remaining resume proofs run on the
+# committed lifecycle.
+with contextlib.redirect_stdout(io.StringIO()):
+    for _ in range(4):
+        b1._advance_r4_migration(st1)
+ok((st1.get("_r4_migration") or {}).get("stage") == "COMMITTED",
+   "migration committed for the resume-proof scenarios")
 saved_rec = copy.deepcopy(st1["_pause_new_risk"])
 st1["_pause_new_risk"] = {"schema": "bogus/1", "since": 1.0}
 b1._write_operator_request(b1.RESUME_REQUEST_FILE)
@@ -316,13 +332,14 @@ ok(b3._valid_pause_new_risk(disk_body(wd3).get("_pause_new_risk")),
    "completion pause persisted")
 ok(len(fake3.sent) == 0, "no sends needed on an already-flat account")
 
-# the paused folder resumes later only via --resume-paused after proof
+# the flattened r4 folder still carries its pending one-time migration:
+# --resume-paused is HELD by that stronger halt (never overridden)
 rebind_requests(b3, wd3)
 b3._write_operator_request(b3.RESUME_REQUEST_FILE)
 with contextlib.redirect_stdout(io.StringIO()):
     b3._consume_operator_pause_requests(st3)
-ok("_pause_new_risk" not in st3,
-   "flattened folder resumes via --resume-paused after proof")
+ok("_pause_new_risk" in st3,
+   "flattened r4 folder holds the pause while the migration is pending")
 
 print(f"test_operator_commands: {PASS[0]} pass, {FAIL[0]} fail")
 sys.exit(1 if FAIL[0] else 0)
