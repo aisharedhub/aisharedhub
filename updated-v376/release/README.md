@@ -31,7 +31,9 @@ Python 3.11+:
     pip install MetaTrader5 numpy tzdata
 
 Run the bot from its own dedicated folder (this DEFAULT folder). The
-folder must contain `vol_target_bot_v12.py` and `shadow_seed.json`.
+folder must contain `vol_target_bot_v12.py`, `shadow_seed.json` and
+`shadow_seed_manifest.json` (the seed and its manifest are
+hash-pinned in the bot; a missing or altered file is refused at boot).
 Flags are accepted in any order; unknown, duplicate, contradictory or
 untested values are refused before any MT5 or state access.
 
@@ -115,7 +117,8 @@ build with the supplied state, and the account is
    account singleton refuses a second.
 3. Keep every existing file in the working folder — state, backups and
    recovery evidence are the migration's inputs. Copy
-   `vol_target_bot_v12.py` and `shadow_seed.json` from this DEFAULT
+   `vol_target_bot_v12.py`, `shadow_seed.json` and
+   `shadow_seed_manifest.json` from this DEFAULT
    folder over the old ones (replace the bot; keep
    `bot_state_v12.json`, `bot_state_v12.json.bak` and every other file
    in place).
@@ -144,7 +147,7 @@ resumable by the old build.
 member; the archive is deterministic — rebuilding it from identical
 inputs is byte-identical. Verify after extraction:
 
-    python -c "import hashlib,sys; [print(hashlib.sha256(open(p,'rb').read()).hexdigest(), p) for p in sys.argv[1:]]" DEFAULT/vol_target_bot_v12.py DEFAULT/shadow_seed.json
+    python -c "import hashlib,sys; [print(hashlib.sha256(open(p,'rb').read()).hexdigest(), p) for p in sys.argv[1:]]" DEFAULT/vol_target_bot_v12.py DEFAULT/shadow_seed.json DEFAULT/shadow_seed_manifest.json
 
 The console prints the bot and seed hashes at startup (informational);
 this manifest is the release authority. Maintainer tests and evidence

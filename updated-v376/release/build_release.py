@@ -4,6 +4,7 @@ Assembles UpdatedV376.zip:
     DEFAULT/                 the live working folder, essentials only
         vol_target_bot_v12.py
         shadow_seed.json
+        shadow_seed_manifest.json
         README.md            exact commands + one-time r4 handoff
     CHANGES.md               change report
     TEST-RESULTS.md          test summary
@@ -32,6 +33,8 @@ MEMBERS = [
      os.path.join(ROOT, "build", "vol_target_bot_v12.py")),
     ("DEFAULT/shadow_seed.json",
      os.path.join(ROOT, "build", "shadow_seed.json")),
+    ("DEFAULT/shadow_seed_manifest.json",
+     os.path.join(ROOT, "build", "shadow_seed_manifest.json")),
     ("DEFAULT/README.md", os.path.join(HERE, "README.md")),
     ("CHANGES.md", os.path.join(HERE, "CHANGES.md")),
     ("TEST-RESULTS.md", os.path.join(HERE, "TEST-RESULTS.md")),

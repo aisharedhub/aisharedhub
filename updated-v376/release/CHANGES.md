@@ -104,6 +104,23 @@ equivalence, not by inspection alone. Final build: BOT_BUILD
   `_TEST_FLATTEN_STOP_MAX_POLLS` — same family as the existing bounded
   loop seams.
 
+## 11. Suite strengthening driven by the mutation battery (§20)
+
+The first battery pass left four mutants alive; each exposed a real
+assertion gap (the bot itself needed no change), closed as follows:
+
+* Gate boundary probes now use a dyadic threshold (2⁻⁵) where
+  `g_dd == -START_MIN_DD` and `eq/low−1 == START_BOUNCE` are exactly
+  representable: with 0.02/0.005 the equality itself is unreachable in
+  IEEE-754, so inclusive-vs-exclusive comparisons were unobservable.
+* The dated-ledger validator's omitted-vs-numeric contradiction (a row
+  flagged `account-return-omitted` carrying a numeric return) now has a
+  direct rejection case plus its honest-form control.
+* The operator pause is proved SUFFICIENT alone by a full campaign: the
+  same authorized folder places zero entries inside the lease while
+  paused, never catches the missed lease up late, and places the four
+  entries at the next session's lease after resume.
+
 ## Retained unchanged
 
 The complete V389 safety engine: crash-safe double-image state with
