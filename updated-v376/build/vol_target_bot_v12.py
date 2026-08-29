@@ -17060,6 +17060,27 @@ def _controller_ledger_absorb_backfill(st, authority, gap_records):
     return True
 
 
+def _ledger_sleeve_fracs(rows):
+    """Normalize applied-exposure sleeve rows to per-sleeve fractions.
+
+    The day-roll audit persists {\"lots\", \"frac\"} rows per sleeve; the
+    dated ledger records the contribution FRACTIONS only.  Any unusable
+    row yields None (sleeves omitted) rather than a refused entry.
+    """
+    if not isinstance(rows, dict):
+        return None
+    out = {}
+    for name, row in rows.items():
+        if name not in SHADOW_W:
+            continue
+        frac = row.get("frac") if isinstance(row, dict) else row
+        if (not _finite_num(frac)
+                or not -MAX_LEVERAGE <= float(frac) <= MAX_LEVERAGE):
+            return None
+        out[name] = float(frac)
+    return out or None
+
+
 def _controller_ledger_append_roll(st, entry):
     """Append one live roll observation to the dated ledger.
 
@@ -23763,9 +23784,7 @@ def roll_day_state(st, start_bal, continuity_step=None,
                 "requested_L": (float(pending["requested_L"])
                                 if _finite_num(pending.get("requested_L"))
                                 else None),
-                "sleeves": (copy.deepcopy(pending["sleeves"])
-                            if isinstance(pending.get("sleeves"), dict)
-                            else None),
+                "sleeves": _ledger_sleeve_fracs(pending.get("sleeves")),
                 "flags": [],
             })
         else:
@@ -36706,6 +36725,24 @@ def _main_impl():
                 # A queued/promoted account mark owns this poll. Let shadow
                 # drain one oldest-first step, then stop before any signal or
                 # exposure-increase code.
+                shadow_roll(st)
+                save_state(st); time.sleep(POLL_SECONDS); continue
+            _sh_after_roll = st.get("shadow")
+            if (isinstance(_sh_after_roll, dict)
+                    and _sh_after_roll.get("backfilled") is True
+                    and isinstance(_dc_after_roll, dict)
+                    and _sh_after_roll.get("session")
+                        != _dc_after_roll.get("session")):
+                # The account mark can settle in the same poll its D1 bundle
+                # arrives, leaving the strategy ledger owing its oldest fold
+                # with no pending mark left to own later polls.  Under the
+                # immediate profile nothing else drains that skew, so every
+                # send would fail its NY17 frontier reproof forever.  Mirror
+                # the first-start bootstrap's alignment rule: drain exactly
+                # one oldest-first shadow step, then end this poll before
+                # any signal or exposure-increase code (rails/closes already
+                # ran at the poll head; a fold that cannot prove yet simply
+                # retries, keeping new risk fail-closed).
                 shadow_roll(st)
                 save_state(st); time.sleep(POLL_SECONDS); continue
             _post_roll_preclose = _prepare_ny17_preclose_mark(st)
