@@ -3444,6 +3444,9 @@ def _validate_safety_records_impl(
         if ("_r4_migration" in st
                 and not _valid_r4_migration(st.get("_r4_migration"), st)):
             problems.append("_r4_migration malformed/conflicting")
+        if ("_pause_new_risk" in st
+                and not _valid_pause_new_risk(st.get("_pause_new_risk"))):
+            problems.append("_pause_new_risk malformed/conflicting")
         if ("_applied_exposure" in st
                 and not _valid_applied_exposure(
                     st.get("_applied_exposure"))):
@@ -3962,7 +3965,9 @@ def _new_risk_blocked():
     r4_predecessor_lifecycle = bool(
         isinstance(st, dict)
         and _valid_v389_lifecycle_binding(st.get("_lifecycle_binding")))
+    operator_paused = isinstance(st, dict) and "_pause_new_risk" in st
     return bool(_SAVE_FAILED[0] or _HEALTH_BAD[0]
+                or operator_paused
                 or r4_migration_pending or r4_predecessor_lifecycle
                 or _EXTERNAL_CASHFLOW_UNKNOWN[0]
                 or ((LIVE or EXPORT_CONTINUITY)
@@ -4022,6 +4027,18 @@ def _nnr_block(reason):
             causes.append(f"{_count} unresolved exact-ticket close intent(s)")
         if isinstance(_st, dict) and isinstance(_st.get("_close_only_halt"), dict):
             causes.append("persistent close-only halt")
+        if isinstance(_st, dict) and "_pause_new_risk" in _st:
+            causes.append("operator pause (--resume-paused to clear)")
+        if (isinstance(_st, dict)
+                and _valid_v389_lifecycle_binding(
+                    _st.get("_lifecycle_binding"))):
+            causes.append("r4 predecessor lifecycle awaiting one-time "
+                          "migration")
+        _r4rec = _st.get("_r4_migration") if isinstance(_st, dict) else None
+        if (isinstance(_st, dict) and "_r4_migration" in _st
+                and (not isinstance(_r4rec, dict)
+                     or _r4rec.get("stage") != "COMMITTED")):
+            causes.append("one-time r4 migration incomplete")
         _recovery_record = (_st.get("_safety_recovery_pending")
                             if isinstance(_st, dict) else None)
         if (isinstance(_st, dict)
@@ -34157,6 +34174,94 @@ def _emit_console(text):
         pass
 
 
+_PAUSE_NEW_RISK_SCHEMA = "pause_new_risk/1"
+PAUSE_REQUEST_FILE = os.path.join(_BOT_DIR, "pause_new_risk.request")
+RESUME_REQUEST_FILE = os.path.join(_BOT_DIR, "resume_new_risk.request")
+
+
+def _valid_pause_new_risk(value):
+    return bool(
+        isinstance(value, dict)
+        and set(value) == {"schema", "since"}
+        and value.get("schema") == _PAUSE_NEW_RISK_SCHEMA
+        and _finite_num(value.get("since"), positive=True))
+
+
+def _write_operator_request(path):
+    """Atomically place an operator request file beside the state."""
+    try:
+        fd, tmp = tempfile.mkstemp(
+            prefix=os.path.basename(path) + ".write-",
+            dir=os.path.dirname(path) or ".")
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump({"schema": "operator_request/1",
+                       "requested_at": float(time.time())}, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
+        return True
+    except Exception as exc:
+        print(f"*** could not write {os.path.basename(path)}: "
+              f"{type(exc).__name__}: {exc}")
+        return False
+
+
+def _consume_operator_pause_requests(st):
+    """Poll-head/startup consumption of durable pause/resume requests.
+
+    Pause applies immediately (one durable record, double-saved).  Resume
+    applies only after proof: valid safety records and no stronger halt in
+    the state — protections, reductions, closes and target handling never
+    depended on the pause and continue regardless.
+    """
+    if not isinstance(st, dict):
+        return
+    try:
+        pause_requested = os.path.isfile(PAUSE_REQUEST_FILE)
+        resume_requested = os.path.isfile(RESUME_REQUEST_FILE)
+    except Exception:
+        return
+    if pause_requested:
+        if "_pause_new_risk" not in st:
+            record = {"schema": _PAUSE_NEW_RISK_SCHEMA,
+                      "since": float(time.time())}
+            work = copy.deepcopy(st)
+            work["_pause_new_risk"] = record
+            if save_state(work) and save_state(work):
+                st.clear(); st.update(work)
+                log("*** OPERATOR PAUSE: new risk durably paused; rails, "
+                    "reductions, closes and target handling continue")
+            else:
+                return                      # retry next poll
+        try:
+            os.remove(PAUSE_REQUEST_FILE)
+        except OSError:
+            pass
+        return
+    if resume_requested:
+        if "_pause_new_risk" in st:
+            if not _valid_pause_new_risk(st.get("_pause_new_risk")):
+                log("*** OPERATOR RESUME held: pause record malformed — "
+                    "manual review required")
+                return
+            if not _validate_safety_records(st, log_bad=True):
+                log("*** OPERATOR RESUME held: safety records must validate "
+                    "before the pause clears")
+                return
+            work = copy.deepcopy(st)
+            work.pop("_pause_new_risk", None)
+            if save_state(work) and save_state(work):
+                st.clear(); st.update(work)
+                log("*** OPERATOR RESUME: durable pause cleared after proof; "
+                    "ordinary authorization gates still apply")
+            else:
+                return
+        try:
+            os.remove(RESUME_REQUEST_FILE)
+        except OSError:
+            pass
+
+
 def _valid_applied_exposure(value):
     """Per-sleeve broker-proved applied exposure record (defect-2 repair)."""
     keys = {"schema", "session", "requested_L", "proven_L", "matched",
@@ -35489,9 +35594,169 @@ def _v388_incident_read_only_economic_authority(st):
     return ok
 
 
+def _run_diagnose():
+    """Strictly read-only folder/state diagnosis; touches no file, no MT5."""
+    print(f"[diagnose] bot {BOT_BUILD} | authority "
+          f"{DIRECT_RECIPE_AUTHORITY_SHA256[:16]}…")
+    slots = []
+    for label, path in (("primary", STATE_FILE),
+                        ("tmp", STATE_FILE + ".tmp"),
+                        ("bak", STATE_FILE + ".bak")):
+        exists = os.path.exists(path)
+        loaded = _read_state_image(path) if exists else None
+        slots.append((label, path, exists, loaded))
+        if not exists:
+            print(f"[diagnose] {label}: absent")
+        elif loaded is None:
+            print(f"[diagnose] {label}: UNREADABLE/torn")
+        else:
+            print(f"[diagnose] {label}: generation "
+                  f"{loaded['generation']} signed {loaded['signed']}")
+    bodies = [row[3]["body"] for row in slots if row[3] is not None]
+    if not bodies:
+        print("[diagnose] no readable state image — virgin folder or manual "
+              "recovery required")
+        return
+    body = max(
+        (row[3] for row in slots if row[3] is not None),
+        key=lambda image: image["generation"])["body"]
+    binding = body.get("_lifecycle_binding")
+    if isinstance(binding, dict):
+        print(f"[diagnose] lifecycle {binding.get('schema')} | recipe "
+              f"{binding.get('recipe')} policy {binding.get('entry_policy')} "
+              f"| login {binding.get('login')} server "
+              f"{binding.get('server')!r}")
+        capital = binding.get("sizing_cents")
+        if isinstance(capital, int):
+            print(f"[diagnose] capital base ${capital/100.0:,.2f} | breaker "
+                  f"{binding.get('breaker_bps')}bps target "
+                  f"{binding.get('target_bps')}bps")
+    else:
+        print("[diagnose] no lifecycle binding (virgin or malformed)")
+    record = body.get("_r4_migration")
+    if isinstance(record, dict):
+        print(f"[diagnose] r4 migration: stage {record.get('stage')}")
+    elif _valid_v389_lifecycle_binding(binding):
+        print("[diagnose] exact V389 r4 lifecycle: one-time migration "
+              "pending (runs on the next live start)")
+    ledger = body.get("_controller_ledger")
+    if _valid_controller_ledger(ledger):
+        entries = ledger["entries"]
+        windows = _controller_windows({"_controller_ledger": ledger})
+        vol_txt = "unprovable"
+        if windows is not None:
+            vol_txt = f"{float(np.std(np.array(windows[0], float)))*100:.4f}%"
+        print(f"[diagnose] dated controller ledger: {len(entries)} "
+              f"observations through {entries[-1]['session']} | 20d vol "
+              f"{vol_txt}")
+    else:
+        print("[diagnose] dated controller ledger: ABSENT/invalid "
+              "(no live vol authority)")
+    sh = body.get("shadow")
+    if isinstance(sh, dict) and _finite_num(sh.get("eq")):
+        print(f"[diagnose] shadow eq {sh.get('eq'):.6f} peak "
+              f"{sh.get('peak'):.6f} dd {float(sh.get('dd', 0.0))*100:+.2f}% "
+              f"| session {sh.get('session')} armed {sh.get('armed')}")
+    dc = body.get("_daycount")
+    open_txns = []
+    if isinstance(dc, dict) and "pending" in dc:
+        pend = dc["pending"]
+        open_txns.append(
+            f"day-roll {pend.get('session')}→{pend.get('next_session')} "
+            f"stage {pend.get('stage')} applied {pend.get('applied_L')}")
+    for key, label in (("_clock_hold_dip", "unmerged clock-hold dip"),
+                       ("_order_intent", "order intent"),
+                       ("_close_intent", "close intent(s)"),
+                       ("_close_only_halt", "close-only halt"),
+                       ("_pause_new_risk", "operator pause"),
+                       ("_target_flat_watch", "target watch"),
+                       ("_target_hit", "permanent TARGET HIT"),
+                       ("_predecessor_takeover", "predecessor takeover"),
+                       ("_ledger_recovery_halt", "ledger recovery halt")):
+        if key in body:
+            open_txns.append(label)
+    print("[diagnose] open transactions/authorities: "
+          + ("; ".join(open_txns) if open_txns else "none"))
+    exposure = body.get("_applied_exposure")
+    if _valid_applied_exposure(exposure):
+        print(f"[diagnose] applied exposure: requested "
+              f"{exposure['requested_L']:.2f}x proven "
+              f"{exposure['proven_L']:.2f}x matched {exposure['matched']}")
+    print(f"[diagnose] requested vs proven leverage state: _requested_L="
+          f"{body.get('_requested_L')} _last_L={body.get('_last_L')}")
+    print("[diagnose] read-only pass complete — no file or terminal was "
+          "touched")
+
+
+def _run_flatten_and_stop(st):
+    """Managed close-everything, prove flat/orderless, durably pause, exit.
+
+    The folder stays resumable: a later start runs under the durable pause
+    until --resume-paused clears it after proof.
+    """
+    if not _loaded_state_interrupt_authority(st):
+        log("*** FLATTEN-AND-STOP REFUSED: the loaded state is not an "
+            "identity-bound lifecycle of this account")
+        return False
+    _state_schema_pass(st)
+    if not isinstance(st.get("_pause_new_risk"), dict):
+        work = copy.deepcopy(st)
+        work["_pause_new_risk"] = {
+            "schema": _PAUSE_NEW_RISK_SCHEMA, "since": float(time.time())}
+        if not (save_state(work) and save_state(work)):
+            log("*** FLATTEN-AND-STOP: durable pause could not persist — "
+                "no broker request sent")
+            return False
+        st.clear(); st.update(work)
+    log("*** OPERATOR FLATTEN-AND-STOP: durable pause committed; closing "
+        "every position and cancelling every pending order on this "
+        "dedicated account until flat/orderless proof")
+    polls = 0
+    while True:
+        _rollback_process_known_unsent_intents(st)
+        _time_feed_health_check("flatten-and-stop")
+        _resolve_order_intent(st)
+        _resolve_close_intents(st)
+        flat, activity = flatten_all(
+            "operator flatten-and-stop", require_account_flat=True,
+            report_activity=True)
+        save_state(st)
+        if flat and not activity and "_order_intent" not in st \
+                and "_close_intent" not in st:
+            log("*** FLATTEN-AND-STOP COMPLETE: account is authoritatively "
+                "flat and orderless; the durable pause holds until "
+                "--resume-paused. Exiting.")
+            return True
+        polls += 1
+        limit = globals().get("_TEST_FLATTEN_STOP_MAX_POLLS")
+        if (isinstance(limit, int) and not isinstance(limit, bool)
+                and 0 <= limit <= polls):
+            return False
+        if not globals().get("_TEST_NO_SLEEP"):
+            time.sleep(POLL_SECONDS)
+
+
 def _main_impl():
     if SELFCHECK:
         selfcheck(); return
+    if DIAGNOSE:
+        _run_diagnose(); return
+    if PAUSE_NEW_RISK_CMD:
+        # Durable sidecar request; the live process consumes it at its next
+        # poll head (or its next start).  No state/broker touch from here.
+        if _write_operator_request(PAUSE_REQUEST_FILE):
+            print("pause requested: new risk will durably pause at the "
+                  "running bot's next poll (rails, reductions, closes and "
+                  "target handling continue). Resume with --resume-paused.")
+            return
+        raise SystemExit(1)
+    if RESUME_PAUSED_CMD:
+        if _write_operator_request(RESUME_REQUEST_FILE):
+            print("resume requested: the running bot lifts the operator "
+                  "pause at its next poll only after its safety records "
+                  "prove clean; stronger halts are never overridden.")
+            return
+        raise SystemExit(1)
     if mt5 is None:
         try:
             _mt5_initialize()  # selects auto-discovery or validates an override
@@ -35579,6 +35844,11 @@ def _main_impl():
     _loaded_manage_authorized = _loaded_state_interrupt_authority(st)
     if _loaded_manage_authorized:
         _MAIN_MANAGE_READY[0] = True
+    if FLATTEN_AND_STOP:
+        # Operator-managed close-everything (never Ctrl+C):  durable pause,
+        # then close/cancel until flat/orderless proof, then exit.  The
+        # folder stays resumable under the pause via --resume-paused.
+        raise SystemExit(0 if _run_flatten_and_stop(st) else 9)
     # Absolute predecessor-capital precedence must run before custody-only or
     # terminal routing. V383/V384 and earlier interpreted ``--capital`` as
     # sizing-only; even a target/watch/halt image would acquire different loss
@@ -36005,6 +36275,8 @@ def _main_impl():
             _rollback_process_known_unsent_intents(st)
             _refresh_pending_orders_health()  # UNKNOWN/any active order blocks
                                                # risk on the exclusive account
+            _consume_operator_pause_requests(st)  # durable operator pause/
+                                                  # resume sidecar requests
             _poll_takeover = (st.get("_predecessor_takeover")
                               if isinstance(st, dict) else None)
             _poll_takeover_pending = bool(
