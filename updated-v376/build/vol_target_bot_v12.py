@@ -869,7 +869,7 @@ RESUME_PAUSED_CMD = RELEASE_RECIPE_ID == "resume"
 FLATTEN_AND_STOP = RELEASE_RECIPE_ID == "flatten-stop"
 ASSUME_YES = bool((_DIRECT_PROFILE or {}).get("assume_yes"))
 V376_P1_PATH_PINNED = False
-BOT_BUILD = "v3.9.4-updated-v376"
+BOT_BUILD = "v3.9.5-updated-v376"
 
 if MODE not in MODES:
     print(f"--mode must be one of {list(MODES)}"); sys.exit(1)
@@ -2197,6 +2197,12 @@ _DAILY_ENTRY_WINDOW_MIN = {
 
 ORB_ENTRY_GRACE_S = 30
 _MAX_BROKER_FILL_LATENCY_S = 60.0
+# Once an order has actually been SENT, the broker needs a realistic window
+# to answer.  The strategy deadline governs whether to send at all; it must
+# never also shrink the post-send fill budget to ~0, which would classify a
+# perfectly normal fill as an envelope violation and latch an account-wide
+# close-only halt.  Every sent order therefore gets at least this much.
+_MIN_BROKER_FILL_GRACE_S = 15.0
 ORB_ENTRY_MAX_TICKS = 20.0
 ORB_ENTRY_MAX_R_DRIFT = 0.15
 _SEND_EDGE_MAX_ELAPSED_S = 15.0
@@ -12379,10 +12385,16 @@ def _new_risk_send_boundary_ok(initial_account, where, req=None):
     try:
         rail_now = _broker_prague_rail_now()
     except Exception as exc:
+        # HOLD means DO NOT SEND.  This returned the truthy string "hold",
+        # which the sole caller (`if not _new_risk_send_boundary_ok(...)`)
+        # read as PASS — letting the order through with every remaining
+        # send-edge rail skipped.  Blocking is the only correct answer at a
+        # one-way edge whose civil-day authority is unreadable.
         log("[RAIL] breaker broker civil-day read unavailable "
             f"({type(exc).__name__}: {exc}) — static floor remains live; "
             "HOLD this poll without liquidation")
-        return "hold"
+        _nnr_block("new-risk final send-edge civil-day authority unreadable")
+        return False
     br = st.get("breaker") if isinstance(st, dict) else None
     day_key = (rail_now.date().isoformat()
                if rail_now is not None else None)
@@ -16143,6 +16155,24 @@ def check_breaker(st, start_bal):
             "liquidation")
         return "hold"
     tripped = br.get("tripped")
+    # Clear a demonstrably EXPIRED stand-down here, not only inside the
+    # once-per-day anchor commit.  Startup schema repair sets tripped=True
+    # from any persisted standdown_until string (it has no broker-time
+    # witness and says "later qualified expiry may clear it"), but the
+    # new-day commit that used to be the only clearing path cannot run again
+    # on a same-day restart.  The result was that ANY mid-session restart
+    # after the account's first-ever trip flattened the whole book and stood
+    # it down for the rest of the day with no breach — and, because tripped
+    # stayed latched, re-flattened during every unreadable-clock window
+    # (the broker's daily 17:00 NY break, where BTC still trades).
+    _su_now = br.get("standdown_until")
+    if (tripped is True and dk is not None
+            and _canonical_iso_date(_su_now) and dk > _su_now):
+        br["tripped"] = False
+        tripped = False
+        log(f"[RAIL] persisted breaker stand-down expired ({_su_now} < {dk}) "
+            "— cleared against the qualified broker day; no liquidation")
+        save_state(st)
     if (((rail_now is None or rollback) and tripped is True)
             or (dk is not None and br.get("date") == dk
                 and tripped is not False)):
@@ -28568,7 +28598,13 @@ def _latest_fill_deadline(st, magic, effect, sent_at):
             if not _valid_daily_entry_plan(plan):
                 return None
             strategy_deadline = float(plan["expires_epoch"])
-        result = min(cap, strategy_deadline)
+        # Floor the post-send budget: a send late inside the ORB entry window
+        # (or near a daily plan expiry) previously produced a deadline only
+        # milliseconds after sent_at, so an ordinary 1-2 s broker fill was
+        # judged a violation and halted the whole account.  The cap still
+        # bounds it at _MAX_BROKER_FILL_LATENCY_S.
+        result = min(cap, max(strategy_deadline,
+                              sent_at + _MIN_BROKER_FILL_GRACE_S))
     except Exception:
         return None
     return (float(result) if _finite_num(result, positive=True)
@@ -31610,6 +31646,20 @@ def _reduce_to(cur, want_abs, info, note, sk):
                 f"cashflow/ownership authority and inspect the broker log")
         # part impossible (min-lot corner) or rejected -> fall through
     p = min(cur, key=lambda q: q.volume)
+    if p.volume > excess + step * 0.5:
+        # Closing this ticket whole would remove MORE than the controller
+        # asked to trim, and this build never reopens the remainder in the
+        # same call (V376 did: close + trim-reopen).  Over-closing turns a
+        # few-percent de-lever into a full-sleeve liquidation that the daily
+        # entry window cannot rebuild until 18:05 NY.  Hold the existing
+        # exposure instead: a full flatten (want 0) always has
+        # excess >= p.volume and is unaffected by this guard.
+        _log_throttled(
+            f"  [{note}] partial closes unavailable and the smallest ticket "
+            f"({p.volume:g}) exceeds the requested trim ({excess:g}) — "
+            "HOLDING exposure rather than over-closing the sleeve",
+            key=f"trim overshoot hold {info.name}", window=300)
+        return "blocked"
     if not _close_one(p, f"{note} trim-whole"):
         return "blocked"
     return "done" if p.volume >= excess - 1e-9 else "progress"
@@ -31663,7 +31713,20 @@ def place_target(symbol, weight_frac, target_pos, leverage, magic, note):
     desired_frac = weight_frac * target_pos * leverage
     cap = MAX_SLEEVE_FRAC
     desired_frac = max(-cap, min(cap, desired_frac))
-    desired_notional = _sizing_equity(ai) * desired_frac
+    # A degraded equity/binding read makes _sizing_equity() return 0.0, which
+    # would drive desired_notional to 0 and reconcile the sleeve to FLAT — a
+    # full liquidation caused by one bad account read, not by the controller.
+    # The other two sizing sites (sleeve_orb, _record_applied_exposure) both
+    # refuse on a non-finite/zero mark; this one must too.  Holding changes
+    # nothing this poll and the next healthy poll sizes normally.
+    _sizing_eq = _sizing_equity(ai)
+    if not _finite_num(_sizing_eq, positive=True):
+        _log_throttled(
+            f"  {note}: equity/sizing mark unreadable or zero — HOLDING this "
+            "poll (no reconcile, positions untouched)",
+            key=f"sizing mark unreadable {note}", window=300)
+        return
+    desired_notional = _sizing_eq * desired_frac
     want_side = "buy" if desired_frac >= 0 else "sell"
 
     # current net position under this magic (signed)
@@ -32109,6 +32172,20 @@ def _orb_entry_distance_ok(entry_price, sig, spec):
         open_risk = abs(entry_open - stop)
         max_drift = min(ORB_ENTRY_MAX_TICKS * tick_size,
                         ORB_ENTRY_MAX_R_DRIFT * open_risk)
+        # entry_open comes from an MT5 rate bar, i.e. a BID-side quote, while
+        # the price handed in is the SEND quote: ask for a buy, bid for a
+        # sell.  Comparing an ask against a bid open charged the whole spread
+        # to the drift budget on longs only, so a perfectly stationary but
+        # normally-wide market could exhaust a 20-tick budget and abandon the
+        # day's 40%-weight signal — asymmetrically against breakout longs.
+        # Give the buy side exactly the spread this build already accepts as
+        # tradeable (_entry_quote_quality_ok's own limit for the ORB symbol),
+        # so the two sides are measured on equal terms and no wider.
+        if str(sig.get("side")) == "buy":
+            _orb_spread_allow = (_ENTRY_SPREAD_LIMITS.get(
+                SLEEVE_SYMBOL["ORB"], {}) or {}).get("max_abs")
+            if _finite_num(_orb_spread_allow, positive=True):
+                max_drift = max_drift + float(_orb_spread_allow)
     except Exception:
         return False, None
     good = bool(
@@ -32192,6 +32269,50 @@ def _orb_read_only_observation(st, blocker):
         f"  ORB [read-only] {status} | blocker: {reason}",
         key=f"ORB read-only {dkey} {reason}", window=300)
     return True
+
+
+def _orb_scheduled_exit_only(st):
+    """Close ORB exposure that is past its scheduled cutoff — nothing else.
+
+    sleeve_orb owns the ORB lifecycle, but the poll loop skips it on clock/
+    safety HOLD polls (closed market, unqualified boot, unreadable mark).
+    If such a hold spans the 20:55/21:00Z cutoff the position rides overnight
+    at up to 5x sleeve leverage on the 40% weight, while the shadow ledger
+    books that session as exited at the cutoff bar — a divergence the
+    backtest never had.  This helper only ever REDUCES exposure, which is
+    authorized on every path, and touches no ORB state, no sizing and no
+    entry logic."""
+    try:
+        if _v388_incident_atomicity_hold(st):
+            return
+        symbol = SYM_NAS; magic = MAGIC["ORB"]
+        now_utc = (globals().get("_TEST_NOW_UTC", None)
+                   or datetime.now(timezone.utc))
+        session_ord = date.fromisoformat(
+            now_utc.strftime("%Y-%m-%d")).toordinal()
+        have = positions_for(magic, symbol)
+        if not have:
+            return
+        mins = now_utc.hour * 60 + now_utc.minute
+        if _nas_orb_pre_range_close_ord(session_ord):
+            cutoff = 0
+        elif _nas_orb_early_close_ord(session_ord):
+            cutoff = _nas_orb_last_required_minute(session_ord)
+        else:
+            cutoff = _nas_orb_regular_last_required_minute(session_ord)
+        if not isinstance(cutoff, int) or mins < cutoff:
+            return
+        _log_throttled(
+            "  ORB: scheduled cutoff reached during a held poll — closing "
+            "ORB exposure (protective exit only)",
+            key="orb held cutoff exit", window=300)
+        for p in have:
+            _close_one(p, "ORB EOD (held poll)")
+    except Exception as exc:
+        _log_throttled(
+            f"  ORB held-poll protective exit unavailable "
+            f"({type(exc).__name__}) — retrying next poll",
+            key="orb held exit error", window=300)
 
 
 def sleeve_orb(st, L, start_bal):
@@ -36917,6 +37038,7 @@ def _main_impl():
                 _log_throttled("*** account equity/start balance unreadable "
                                "after hard-rail service — all economics held",
                                key="poll equity unknown", window=300)
+                _orb_scheduled_exit_only(st)
                 time.sleep(POLL_SECONDS)
                 continue
             # Terminal risk halts are managed in-process: without a watchdog,
@@ -36939,6 +37061,7 @@ def _main_impl():
                         "proved/persisted — all new risk remains blocked",
                         key="clock hold dip capture unavailable",
                         window=300)
+                _orb_scheduled_exit_only(st)
                 save_state(st); time.sleep(POLL_SECONDS); continue
 
             if _cashflow_status != "clear":
@@ -36949,6 +37072,7 @@ def _main_impl():
                     st, getattr(ai, "equity", None), start_bal)
                 if _cashflow_dip is None:
                     _SAFETY_STATE_INVALID[0] = True
+                _orb_scheduled_exit_only(st)
                 save_state(st); time.sleep(POLL_SECONDS); continue
 
             # Target completion is deliberately before every gate/ledger/
