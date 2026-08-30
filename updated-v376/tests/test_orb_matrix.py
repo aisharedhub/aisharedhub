@@ -188,6 +188,28 @@ ok(len(orb_sends(b5, fake5)) == 0,
 ok("moved too far" in out5.getvalue(),
    "drift refusal is loud (signal expired, not silently retried)")
 
+# ---- F2. the drift budget must be SIDE-SYMMETRIC ----
+# MT5 bar OHLC are BID-side, but a BUY is sent at the ASK.  Measuring the
+# ask against a bid-based open charged the whole spread to the drift budget
+# on longs only, so a normally-wide but perfectly acceptable quote killed
+# the day's 40%-weight signal — asymmetrically against breakout longs.
+_spec_f2 = {"tick_size": 0.1}                    # US100.sim: 20 ticks = 2.0
+_sig_buy = {"side": "buy", "entry_open": 20000.0, "stop": 19960.0}
+_sig_sell = {"side": "sell", "entry_open": 20000.0, "stop": 20040.0}
+# R = 40 -> 0.15R = 6.0, so the budget is the 2.0 tick leg either way.
+_ok_buy, _budget_buy = b5._orb_entry_distance_ok(20003.0, _sig_buy, _spec_f2)
+ok(_ok_buy,
+   f"a BUY quote one normal spread (3.0) above the bid-based open is "
+   f"accepted (budget {_budget_buy})")
+_ok_sell, _ = b5._orb_entry_distance_ok(20003.0, _sig_sell, _spec_f2)
+ok(not _ok_sell,
+   "the SELL side is bid-vs-bid and keeps the strict unwidened budget")
+_ok_far, _ = b5._orb_entry_distance_ok(20030.0, _sig_buy, _spec_f2)
+ok(not _ok_far,
+   "a genuine 30-point move still refuses on the buy side")
+_ok_at_open, _ = b5._orb_entry_distance_ok(20000.0, _sig_buy, _spec_f2)
+ok(_ok_at_open, "a quote exactly on the persisted open is always accepted")
+
 # ================= G. range too small: no-trade session =================
 b6, fake6, market6 = boot_authorized()
 base6 = round(market6.closes["US100.sim"][-1], 1)
