@@ -96,6 +96,26 @@ MUTANTS = [
      "    if abs(implied_fill - fill_volume) > 1e-9:\n"
      "        # Terminal-order",
      "test_order_routes.py"),
+    # -- v3.9.5 trading repairs (each must be killed by its suite) --
+    ("send edge fails OPEN again (returns truthy \"hold\")",
+     '        _nnr_block("new-risk final send-edge civil-day authority '
+     'unreadable")\n        return False',
+     '        return "hold"',
+     "test_protections.py"),
+    ("degraded sizing mark liquidates the sleeve again",
+     "    if not _finite_num(_sizing_eq, positive=True):",
+     "    if False:",
+     "test_protections.py"),
+    ("expired stand-down can no longer clear on a same-day restart",
+     "    if (tripped is True and dk is not None\n"
+     "            and _canonical_iso_date(_su_now) and dk > _su_now):",
+     "    if False and (tripped is True and dk is not None\n"
+     "            and _canonical_iso_date(_su_now) and dk > _su_now):",
+     "test_protections.py"),
+    ("ORB drift budget becomes side-asymmetric again",
+     '        if str(sig.get("side")) == "buy":',
+     "        if False:",
+     "test_orb_matrix.py"),
     # -- account singleton --
     ("account singleton always acquires",
      "    key = _account_singleton_key(ai)",

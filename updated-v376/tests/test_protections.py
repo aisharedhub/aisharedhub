@@ -269,6 +269,77 @@ sells_open = [r for r in fake15.sent
 ok(len(sells_open) == 0,
    "sign flip closes first; the opposite side is never opened same-poll")
 
+# ---- a degraded equity read HOLDS; it never liquidates the sleeve ----
+# place_target used _sizing_equity(ai) unguarded: a 0.0 mark drove the
+# desired notional to 0 and reconciled the sleeve to FLAT — a full
+# liquidation of 45% of book weight caused by one bad account read.
+b17, fake17, st17, _ = oh.boot()
+pos17 = fakemt5._Obj(ticket=951, identifier=951, magic=b17.MAGIC["XAUM"],
+                     symbol="XAUUSD.sim", volume=0.10,
+                     type=fake17.POSITION_TYPE_BUY, price_open=4610.0,
+                     time=0)
+fake17.positions = [pos17]
+b17._RUNTIME_STATE[0] = st17
+_orig_sizing = b17._sizing_equity
+b17._sizing_equity = lambda _ai: 0.0          # degraded mark
+with contextlib.redirect_stdout(io.StringIO()):
+    b17.place_target("XAUUSD.sim", 0.10, 0.5, 1.0, b17.MAGIC["XAUM"],
+                     "XAUM-mom")
+b17._sizing_equity = _orig_sizing
+ok(len(fake17.sent) == 0,
+   f"a zero/unreadable sizing mark sends NOTHING ({len(fake17.sent)})")
+ok(len(fake17.positions) == 1,
+   "the sleeve is retained, not liquidated, on a degraded equity read")
+
+# ---- an EXPIRED stand-down clears instead of flattening on restart ----
+# Startup schema repair sets tripped=True from any persisted
+# standdown_until; the only clearing path used to be the once-per-day
+# anchor commit, so a same-day restart flattened the book with no breach.
+b18, fake18, st18, _ = oh.boot()
+b18._RUNTIME_STATE[0] = st18
+_br18 = st18.setdefault("breaker", {})
+_today = st18.get("breaker", {}).get("date")
+ok(isinstance(_today, str) and _today,
+   f"scenario has a dated anchor ({_today})")
+_br18["tripped"] = True
+_br18["standdown_until"] = "2000-01-01"      # long expired
+with contextlib.redirect_stdout(io.StringIO()):
+    _fired18 = b18.check_breaker(st18, 200000.0)
+ok(st18["breaker"].get("tripped") is False,
+   f"an expired stand-down clears on the qualified broker day "
+   f"({st18['breaker'].get('tripped')!r})")
+ok(len([r for r in fake18.sent if "position" in r]) == 0,
+   "no liquidation is issued for the expired stand-down")
+
+# ---- the final send edge must FAIL CLOSED, never fail open ----
+# _new_risk_send_boundary_ok once returned the truthy string "hold" when the
+# Prague civil-day read raised.  Its sole caller tests `if not ...`, so that
+# return SENT the order with every remaining send-edge rail skipped (breaker
+# record/date/anchor/tripped, NY17 frontier, stand-down, global latches).
+# Guard the whole contract statically: every return in the function must be
+# a boolean, so no future edit can reintroduce a truthy non-boolean.
+import ast as _ast
+_bot_src = open(os.path.join(HERE, "..", "build", "vol_target_bot_v12.py"),
+                encoding="utf-8").read()
+_fn = next(n for n in _ast.walk(_ast.parse(_bot_src))
+           if isinstance(n, _ast.FunctionDef)
+           and n.name == "_new_risk_send_boundary_ok")
+_returns = [n.value for n in _ast.walk(_fn) if isinstance(n, _ast.Return)]
+_non_bool = [
+    _ast.dump(r) for r in _returns
+    if not (r is None
+            or (isinstance(r, _ast.Constant) and isinstance(r.value, bool)))]
+ok(_returns and not _non_bool,
+   f"every _new_risk_send_boundary_ok return is a bool "
+   f"({len(_returns)} returns, offenders: {_non_bool[:2]})")
+ok(all(isinstance(r, _ast.Constant) and r.value is False
+       for r in _returns if not (isinstance(r, _ast.Constant)
+                                 and r.value is True)),
+   "the non-True returns are all explicit False (fail closed)")
+_caller_ok = "if not _new_risk_send_boundary_ok(" in _bot_src
+ok(_caller_ok,
+   "the caller still consumes the send edge in a boolean test")
+
 total = sum(len(f.sent) for f in (fake, fake2, fake3, fake4, fake5, fake6,
                                   fake7, fake13))
 ok(total == 0, "all blocked scenarios produced zero sends")
