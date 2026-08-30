@@ -5,7 +5,7 @@ BOT_BUILD `v3.8.9-fast-r4`, sha256 `083435ea…`), itself verified as V376
 (`v3.7.6`) plus the V389 hardening. Strategy math is bit-identical to
 the trusted V376 (`07516a8c…` archive) — proved by executed side-by-side
 equivalence, not by inspection alone. Final build: BOT_BUILD
-`v3.9.4-updated-v376` (v3.9.0 through v3.9.3 were internal, never
+`v3.9.5-updated-v376` (v3.9.0 through v3.9.4 were internal, never
 deployed).
 
 ## 1. V376-style startup (build order §1)
@@ -326,6 +326,57 @@ refuse the commit; broker fee/interest/dividend/tax rows have their cash
 counted and never block. Suite 85 → 87: a broker swap row commits
 (counted), a deposit still refuses even when the balance agrees with it,
 and the $1,000 balance change and manual-deal refusals are unchanged.
+
+## 17. v3.9.5 — seven trading defects repaired
+
+A 37-agent line-by-line review of the TRADING paths (sizing, sleeve
+signals, ORB, entry execution, exits/rails, session accounting, and
+behavioural divergence from trusted V376), each finding attacked by two
+independent refuters, confirmed twelve defects. Seven are repaired:
+
+* **Fail-open on the order-send edge.** `_new_risk_send_boundary_ok`
+  returned the truthy string `"hold"` when the Prague civil-day read
+  raised, while its sole caller tests `if not ...` — so the guard
+  PASSED and the order was sent with every remaining send-edge rail
+  skipped. It now blocks, as its own log line always claimed.
+* **Spurious full liquidation on a degraded equity read.**
+  `place_target` used `_sizing_equity(ai)` unguarded; a `0.0` mark
+  reconciled XAUM/XAUB/BTC/S8V to FLAT — 45% of book weight — with the
+  controller target unchanged. It now holds the poll.
+* **Trim over-close.** When the broker rejects partial closes,
+  `_reduce_to` closed the whole ticket and never reopened the remainder
+  (V376 does), turning a few-percent de-lever into a full-sleeve
+  liquidation. It now refuses a close that would overshoot the trim; a
+  full flatten is unaffected.
+* **ORB drift measured across the spread.** `entry_open` is a BID-side
+  bar open but the send quote is the ASK on buys, so the spread alone
+  exhausted the 20-tick/0.15R budget and permanently abandoned the
+  day's 40%-weight signal, asymmetrically against longs.
+* **~0-second fill deadline.** A send late in the ORB entry window
+  produced a deadline milliseconds after `sent_at`, so a normal 1–2 s
+  fill was judged an envelope violation and latched an account-wide
+  close-only halt. Every sent order now gets a realistic budget.
+* **Expired stand-down could never clear on a same-day restart.** Any
+  mid-session restart after the account's first-ever rail trip
+  flattened the book and stood it down for the rest of the day with no
+  breach. An expired stand-down now clears against the qualified
+  broker day.
+* **ORB could ride overnight.** Clock/cashflow HOLD polls skip
+  `sleeve_orb`, so a hold spanning the 20:55/21:00Z cutoff missed the
+  EOD flat while the ledger booked the session as exited. An
+  exposure-reducing-only helper now runs that exit on those paths.
+
+Each repair carries a mutant that must be killed (15 → 19 mutants); the
+first battery pass found one survivor — the ORB drift repair had no
+discriminating test — and `test_orb_matrix` now pins that boundary
+directly.
+
+Documented, not changed: `flatten_all` closes one ticket per call (the
+single close-intent slot is structural; V376 closes all in one pass —
+unwind latency, not incorrectness), the 18:05–18:35 increase-only
+window (build order §9, an intentional divergence from V376's
+every-poll reconcile), and `_round_vol` flooring vs V376 rounding
+(contested; interacts with the sleeve caps).
 
 ## Retained unchanged
 

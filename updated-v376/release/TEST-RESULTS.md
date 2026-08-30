@@ -10,7 +10,7 @@ scripts). The supplied live state files were used strictly read-only.
 
 Every suite below ran green, in one sequential battery, against the
 exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
-`268dfa6a3d1af42bd829b4aa2d3ccfccf7b580f30808c0c8ec9f6e27f0fada13`).
+`9ceee308edefe2989cca83d625bd1b39280a15feaffcd37bc9f64407e3d4e5be`).
 
 | Suite | Result |
 | --- | --- |
@@ -24,14 +24,14 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 | test_gate_history | 45 pass, 0 fail |
 | test_formula_equivalence | 45 pass, 0 fail |
 | test_order_routes | 30 pass, 0 fail |
-| test_protections | 31 pass, 0 fail |
+| test_protections | 39 pass, 0 fail |
 | test_fresh_lifecycle | 36 pass, 0 fail |
-| test_orb_matrix | 18 pass, 0 fail |
+| test_orb_matrix | 22 pass, 0 fail |
 | test_target_completion | 15 pass, 0 fail |
 | test_interrupt | 8 pass, 0 fail |
 | test_continuity_chain | 31 pass, 0 fail |
-| **Total** | **822 checks, 0 failures** |
-| run_mutations | **15/15 mutants KILLED, 0 survived** |
+| **Total** | **834 checks, 0 failures** |
+| run_mutations | **19/19 mutants KILLED, 0 survived** |
 
 ## Suites (maintainer/tests/)
 
@@ -47,9 +47,9 @@ exact shipped build (`DEFAULT/vol_target_bot_v12.py`, SHA-256
 | test_gate_history | Full-history causal gate 1:1: the REAL _check_arm vs an independent causal walk across ALL 5,220 eligible launches (zero mismatches); census 5,220/5,181/279; July 24 crossing / July 31 bit-exact low / Aug 4 arm / Aug 5 first-eligible; a cold launch-seeded gate never crosses; IEEE-754 boundary probes; P2 cap force-release; rearm-exactly-once; and the exact 269/279 = 96.4157706093% reproduction from the V376 oracle arrays. |
 | test_formula_equivalence | The trusted V376 bot EXECUTED side by side: momentum/S8V/ONF-regime bit-identical over every real seed window + seeded random walks; the full controller bit-identical over a two-phase grid including the reconstructed defect operating points; sleeve caps; every frozen constant; ONF permanently disabled. |
 | test_order_routes | The exactly-once engine: DONE is only an acknowledgement; full/partial fills prove from causal deals + terminal order history; explicit rejections release durably; timeout/None stay UNKNOWN until a proved zero-fill; INVALID_FILL retries the alternate policy exactly once; malformed receipts and overfills latch close-only; an unresolved intent never resends. |
-| test_protections | Foreign/wrong-symbol/pending-order blocks; UNKNOWN inventory; deposits can never feed strategy; save-failure latch + known-unsent rollback; duplicate-process refusal; account-switch halt; daily/breaker/floor rails (breaker flattens exact-ticket and stands down through the next day); expired daily lease never caught up late; reductions live under the latch; no same-poll reversal. |
+| test_protections | The send edge FAILS CLOSED (an AST guard proves every _new_risk_send_boundary_ok return is a bool, so a truthy non-boolean can never reintroduce the fail-open); a degraded/zero sizing mark HOLDS instead of liquidating the sleeve; an expired breaker stand-down clears on the qualified broker day without liquidating. Foreign/wrong-symbol/pending-order blocks; UNKNOWN inventory; deposits can never feed strategy; save-failure latch + known-unsent rollback; duplicate-process refusal; account-switch halt; daily/breaker/floor rails (breaker flattens exact-ticket and stands down through the next day); expired daily lease never caught up late; reductions live under the latch; no same-poll reversal. |
 | test_fresh_lifecycle | Complete campaigns through the real _main_impl: P2-immediate virgin bind → NY17 roll → Prague anchor → four genuine lease entries with requested 6.00x broker-PROVEN applied 6.00x → dated live-account ledger entry with per-sleeve fractions; identical-command resume with zero sends; wrong-recipe refusal without semantic mutation; closed-market Saturday startup binds/writes nothing; P1 gated waits and resumes waiting; virgin P2-gated refuses without P1 continuity. |
-| test_orb_matrix | The real ORB engine: exact six-bar range; first-breakout entry with the stop on the far range side and TP at exactly entry+5R; verified SL/TP protection under the 5x inner cap; one event per day; EOD exact-ticket flat; missing/duplicate bars never trade; ~30s entry-window expiry; the min(20 ticks, 0.15R) drift cap; range-too-small stand-down. |
+| test_orb_matrix | The real ORB engine: exact six-bar range; first-breakout entry with the stop on the far range side and TP at exactly entry+5R; verified SL/TP protection under the 5x inner cap; one event per day; EOD exact-ticket flat; missing/duplicate bars never trade; ~30s entry-window expiry; the min(20 ticks, 0.15R) drift cap AND its side symmetry (bars are bid-side while a buy sends at the ask, so the buy budget carries exactly the spread this build accepts as tradeable; the sell side stays strict); range-too-small stand-down. |
 | test_target_completion | A genuine rally through $210k: durable watch → account-wide exact-ticket closes realize the profit → double flat/cash proof → permanent target_hit/2 in BOTH recovery images → restart permanently complete; a below-line realization NEVER passes falsely. |
 | test_interrupt | Ctrl+C managed flatten: exact-ticket closes, the keyboard halt clears only after the 60s account-flat quiet proof, exposure is retained (never abandoned) under a silent broker. |
 | test_continuity_chain | The REAL section-17 chain end to end: P1-immediate campaign to +10% → ALIGNED completion carrying a PREPARED continuity transaction (never audit-poisoned) → --export-continuity performs the terminal fold and WRITES the hash-enveloped shadow_continuity.json (exit 0, zero sends) → re-export non-destructive → a tampered envelope refuses a fresh folder outright → the pristine envelope is adopted by a fresh $200k P2-gated folder (/11 p2-fresh, continuity identity sealed, rearm consumed once, gate re-seeking, no spurious target completion); the deferral-reconstruction chain (a transient constructor failure defers cleanly and the export command reconstructs under the binding recipe); and the FAST-PASS chain (a challenge completed in fewer than 20 live sessions exports its true mixed-provenance window and is adopted). |
